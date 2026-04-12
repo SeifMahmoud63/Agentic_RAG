@@ -6,6 +6,7 @@ from controllers.DataController import DataController
 from controllers.ProjectController import ProjectController
 from controllers.ProcessController import ProcessController
 from controllers.BaseController import BaseController
+from vectordatabase import database
 
 import aiofiles
 from models import ResponseSignal
@@ -88,7 +89,6 @@ async def process_assets_folder(process_request: ProcessRequest):
             files_to_process = process_request.file_ids or os.listdir(project_path)
             
             for f_id in files_to_process:
-
                 try:
                     content = controller.get_content(file_id=f_id)
                     
@@ -106,9 +106,16 @@ async def process_assets_folder(process_request: ProcessRequest):
                     print(f"Skipping {project_folder}/{f_id}: {e}")
                     continue
 
-    return {
-        "status": "success",
-        "total_chunks": len(all_chunks),
-        "data": all_chunks
-    }
+    if all_chunks:
 
+        result_signal, vector_store = database.vector_db(docs=all_chunks)
+        
+        return {
+            "status": ResponseSignal.MADE_CHUNKS_SUCCESSFULY,
+            "message": result_signal,
+            "total_chunks": len(all_chunks),
+        }
+    
+    return {
+        "status": ResponseSignal.ERROR_IN_MAKE_CHUNKS,
+    }
