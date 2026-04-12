@@ -8,3 +8,10 @@ pypdf == 6.9.1
 langchain-community == 0.4.1
 aiofiles == 25.1.0
 chromadb == 1.5.7
+langchain-groq == 1.1.2
+rank-bm25 == 0.2.2
+langchain-huggingface == 1.2.1
+sentence-transformers == 5.4.0
+chromadb == 1.5.7
+flashrank == 0.2.10
+

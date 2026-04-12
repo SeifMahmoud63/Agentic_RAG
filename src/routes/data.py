@@ -111,3 +111,4 @@ async def process_assets_folder(process_request: ProcessRequest):
         "total_chunks": len(all_chunks),
         "data": all_chunks
     }
+
