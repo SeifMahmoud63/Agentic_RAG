@@ -1,10 +1,10 @@
 from .BaseController import BaseController
 from fastapi import UploadFile
-from models import ResponseEnum
+from models import ResponseSignal
 import re
 from helpers import config
 import os
-from ProjectController import ProjectController
+from .ProjectController import ProjectController
 
 
 class DataController(BaseController):
@@ -18,18 +18,18 @@ class DataController(BaseController):
 
 
         if file.content_type not in self.app_settings.FILE_ALLOWED_TYPES:
-            return False,ResponseEnum.FILE_TYPE_NOT_SUPPORTED.value
+            return False,ResponseSignal.FILE_TYPE_NOT_SUPPORTED.value
         
         if file.size > self.size_sclae * self.app_settings.FILE_MAX_SIZE:
-            return False ,ResponseEnum.FILE_SIZE_NOT_EXCEEDED.value
+            return False ,ResponseSignal.FILE_SIZE_NOT_EXCEEDED.value
         
-        return True,ResponseEnum.FILE_VALIDATION_SUCC.value
+        return True,ResponseSignal.FILE_VALIDATION_SUCC.value
         
        
     def generate_unique_filepath(self, orig_file_name: str, project_id: str):
 
         random_key = self.generate_random_string()
-        project_path = ProjectController().get_project_path(project_id=project_id)
+        project_path = ProjectController().get_project_id(project_id=project_id)
 
         cleaned_file_name = self.get_clean_file_name(
             orig_file_name=orig_file_name

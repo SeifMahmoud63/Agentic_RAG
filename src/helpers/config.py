@@ -1,4 +1,6 @@
 from pydantic_settings import BaseSettings,SettingsConfigDict
+from typing import Optional
+
 
 class Settings(BaseSettings):
 
@@ -13,8 +15,6 @@ class Settings(BaseSettings):
     APP_NAME:str
     APP_VERSION : str
     FILE_DEFAULT_CHUNK_SIZE : int
-
-
 
     
     model_config=SettingsConfigDict(

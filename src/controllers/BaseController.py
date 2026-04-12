@@ -12,7 +12,7 @@ class BaseController:
 
         self.file_dir=os.path.join(
             self.base_dir,
-           " assets/files"
+           "assets/files"
         )
 
     def generate_random_string(self, length: int=12):
