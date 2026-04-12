@@ -10,6 +10,11 @@ class Settings(BaseSettings):
     LANGCHAIN_ENDPOINT : str = "https://api.smith.langchain.com"
     FILE_ALLOWED_TYPES :list
     FILE_MAX_SIZE : int
+    APP_NAME:str
+    APP_VERSION : str
+    FILE_DEFAULT_CHUNK_SIZE : int
+
+
 
     
     model_config=SettingsConfigDict(
