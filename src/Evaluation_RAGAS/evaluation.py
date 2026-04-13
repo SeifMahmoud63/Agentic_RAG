@@ -20,7 +20,6 @@ llm = ChatGroq(
 )
 
 def run_rag_evaluation(vector_store):
-    # 1. الأسئلة اللي هنختبر بيها السيستم
     test_questions = [
         "What are the Major ?",
         "List the internships .",
@@ -32,9 +31,7 @@ def run_rag_evaluation(vector_store):
     embeddings = emb_model.get_embedding()
 
 
-    # 2. تجميع البيانات (Inference)
     for question in test_questions:
-        # بنستخدم الـ advanced_retrieve اللي إنت تعبت فيها
         retrieved_docs = retrieve_chunks.advanced_retrieve(vector_store=vector_store, query=question)
         contexts = [doc.page_content for doc in retrieved_docs]
         
@@ -49,14 +46,11 @@ def run_rag_evaluation(vector_store):
             "response": response.content,
         })
 
-    # 3. تحويل البيانات لـ Ragas Dataset
     dataset = EvaluationDataset.from_list(samples)
 
-    # 4. تهيئة المقاييس (Wrappers)
     ragas_llm = LangchainLLMWrapper(llm)
     ragas_embeddings = LangchainEmbeddingsWrapper(embeddings)
 
-    # 5. تنفيذ التقييم
     results = evaluate(
         dataset=dataset,
         metrics=[Faithfulness(), ResponseRelevancy()],

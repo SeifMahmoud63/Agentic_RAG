@@ -26,7 +26,8 @@ def get_cached_docs():
 def cache_docs(data):
     redis_client.set(
         BM25_DOCS_KEY,
-        json.dumps(data)
+        json.dumps(data),
+        ex=3600
     )
 
 

@@ -19,6 +19,7 @@ from query_schema import QuestionRequest
 from langchain_groq import ChatGroq
 from dotenv import load_dotenv
 from Evaluation_RAGAS.evaluation import run_rag_evaluation
+from helpers import hash_utils
 
 
 logger = logging.getLogger('uvicorn.error')
@@ -120,7 +121,7 @@ async def process_assets_folder(process_request: ProcessRequest):
         return {
             "status": ResponseSignal.MADE_CHUNKS_SUCCESSFULY.value,
             "message": result_signal,
-            "total_chunks": len(all_chunks),
+            "total_chunks": len(set(hash_utils.generate_doc_hash(c.page_content) for c in all_chunks)),
         }
     
     return {
@@ -157,25 +158,17 @@ async def ask_question(query: QuestionRequest):
                 "sources": []
             }
 
-        # 3. Construct Context from retrieved documents
         context_text = "\n\n".join([doc.page_content for doc in relevant_docs])
 
-        # 4. Build the Final RAG Prompt
         final_prompt = qa_prompt.format(context_text=context_text, query=query)
 
-
-        # 5. Generate Response using the LLM (Groq)
-      #  response = llm.invoke(qa_prompt)
-        # 5. Generate Response using the LLM (Groq)
-        response = llm.invoke(final_prompt) # استخدم final_prompt هنا
+        response = llm.invoke(final_prompt) 
 
 
         sources = []
         for doc in relevant_docs:
-            # بنعمل تنظيف للميتاداتا عشان الـ FastAPI يفهمها
             clean_metadata = {}
             for key, value in doc.metadata.items():
-                # السطر ده بيحول أي رقم numpy لرقم بايثون عادي (float/int)
                 if hasattr(value, "item"): 
                     clean_metadata[key] = value.item()
                 else:
@@ -188,7 +181,7 @@ async def ask_question(query: QuestionRequest):
 
         return {
             "status": "success",
-            "query": query.query, # اتأكد انك بتبعت النص بس مش الاوبجكت كامل
+            "query": query.query, 
             "answer": response.content,
             "sources": sources
         }
@@ -196,7 +189,6 @@ async def ask_question(query: QuestionRequest):
 
 
     except Exception as e:
-        # Logging the error for debugging
         print(f"Error in Ask_Q endpoint: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -206,18 +198,15 @@ async def ask_question(query: QuestionRequest):
 @data_router.post("/Evaluate_RAG")
 async def evaluate_rag():
     try:
-        # 1. الحصول على الـ Vector Store
         v_store = database.vector_db()
         
         if v_store is None:
             raise HTTPException(status_code=404, detail="Database not found")
 
-        # 2. تشغيل التقييم
         df_results = run_rag_evaluation(v_store)
         df_results = df_results.fillna(0)
 
-        # 3. تحويل النتيجة لـ Dictionary عشان FastAPI يرجعها JSON
-        # هنرجع الـ Mean (المتوسط) بتاع الدرجات والنتائج التفصيلية
+
         summary = df_results[["faithfulness", "answer_relevancy"]].mean().to_dict()
         detailed = df_results.to_dict(orient="records")
 
