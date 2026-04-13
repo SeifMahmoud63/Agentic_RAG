@@ -1,0 +1,10 @@
+Use the following pieces of context to answer the user's question accurately.
+If the answer is not contained within the context, plainly state that you do not know. 
+Do not attempt to hallucinate or make up an answer.
+
+Context:
+{context_text}
+
+Question: {query}
+
+Answer:

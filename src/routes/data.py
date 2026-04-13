@@ -7,12 +7,19 @@ from controllers.ProjectController import ProjectController
 from controllers.ProcessController import ProcessController
 from controllers.BaseController import BaseController
 from vectordatabase import database
-
+from fastapi import HTTPException, status
 import aiofiles
 from models import ResponseSignal
-
 import logging
 from .schema.data import ProcessRequest
+from vectordatabase import database
+from retriever import retrieve_chunks
+from Prompts import qa_prompt
+from query_schema import QuestionRequest
+from langchain_groq import ChatGroq
+from dotenv import load_dotenv
+from Evaluation_RAGAS.evaluation import run_rag_evaluation
+
 
 logger = logging.getLogger('uvicorn.error')
 
@@ -111,11 +118,115 @@ async def process_assets_folder(process_request: ProcessRequest):
         result_signal, vector_store = database.vector_db(docs=all_chunks)
         
         return {
-            "status": ResponseSignal.MADE_CHUNKS_SUCCESSFULY,
+            "status": ResponseSignal.MADE_CHUNKS_SUCCESSFULY.value,
             "message": result_signal,
             "total_chunks": len(all_chunks),
         }
     
     return {
-        "status": ResponseSignal.ERROR_IN_MAKE_CHUNKS,
+        "status": ResponseSignal.ERROR_IN_MAKE_CHUNKS.value,
     }
+
+
+load_dotenv()
+settings = get_settings()
+
+llm = ChatGroq(
+    model=settings.MODEL_NAME,
+    api_key=settings.GROQ_API_KEY
+)
+
+@data_router.post("/Ask_Q")
+async def ask_question(query: QuestionRequest):
+
+    try:
+        v_store = database.vector_db()
+        
+        if v_store is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=ResponseSignal.ERROR_TO_FOUND_DATABASE_WHILE_ASKING.value
+            )
+
+        relevant_docs = retrieve_chunks.advanced_retrieve(vector_store=v_store, query=query.query)
+
+        if not relevant_docs:
+            return {
+                "query": query,
+                "answer": ResponseSignal.SORRY_TO_FIND_RELEVANT_DATA.value,
+                "sources": []
+            }
+
+        # 3. Construct Context from retrieved documents
+        context_text = "\n\n".join([doc.page_content for doc in relevant_docs])
+
+        # 4. Build the Final RAG Prompt
+        final_prompt = qa_prompt.format(context_text=context_text, query=query)
+
+
+        # 5. Generate Response using the LLM (Groq)
+      #  response = llm.invoke(qa_prompt)
+        # 5. Generate Response using the LLM (Groq)
+        response = llm.invoke(final_prompt) # استخدم final_prompt هنا
+
+
+        sources = []
+        for doc in relevant_docs:
+            # بنعمل تنظيف للميتاداتا عشان الـ FastAPI يفهمها
+            clean_metadata = {}
+            for key, value in doc.metadata.items():
+                # السطر ده بيحول أي رقم numpy لرقم بايثون عادي (float/int)
+                if hasattr(value, "item"): 
+                    clean_metadata[key] = value.item()
+                else:
+                    clean_metadata[key] = value
+            
+            sources.append({
+                "content": doc.page_content[:200] + "...", 
+                "metadata": clean_metadata
+            })
+
+        return {
+            "status": "success",
+            "query": query.query, # اتأكد انك بتبعت النص بس مش الاوبجكت كامل
+            "answer": response.content,
+            "sources": sources
+        }
+    
+
+
+    except Exception as e:
+        # Logging the error for debugging
+        print(f"Error in Ask_Q endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=ResponseSignal.ERROR_WHILE_PROCESSING_QUESTION.value)
+    
+
+@data_router.post("/Evaluate_RAG")
+async def evaluate_rag():
+    try:
+        # 1. الحصول على الـ Vector Store
+        v_store = database.vector_db()
+        
+        if v_store is None:
+            raise HTTPException(status_code=404, detail="Database not found")
+
+        # 2. تشغيل التقييم
+        df_results = run_rag_evaluation(v_store)
+        df_results = df_results.fillna(0)
+
+        # 3. تحويل النتيجة لـ Dictionary عشان FastAPI يرجعها JSON
+        # هنرجع الـ Mean (المتوسط) بتاع الدرجات والنتائج التفصيلية
+        summary = df_results[["faithfulness", "answer_relevancy"]].mean().to_dict()
+        detailed = df_results.to_dict(orient="records")
+
+        return {
+            "status": "success",
+            "overall_scores": summary,
+            "detailed_results": detailed
+        }
+
+    except Exception as e:
+        print(f"Eval Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

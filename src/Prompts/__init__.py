@@ -9,3 +9,4 @@ def get_prompt(file_name):
 
 HYDE_PROMPT = get_prompt("hyde")
 REWRITE_PROMPT = get_prompt("re_write_query")
+qa_prompt=get_prompt("qa_prompt")

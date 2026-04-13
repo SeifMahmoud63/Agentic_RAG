@@ -1,1 +1,1 @@
-Write a detailed answer to the following question to act as a hypothetical document
+Write a detailed answer to the following question to act as a hypothetical document :{query}

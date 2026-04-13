@@ -14,4 +14,5 @@ langchain-huggingface == 1.2.1
 sentence-transformers == 5.4.0
 chromadb == 1.5.7
 flashrank == 0.2.10
-
+ragas == 0.4.3
+redis == 7.4.0

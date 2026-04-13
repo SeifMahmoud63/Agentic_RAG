@@ -9,3 +9,8 @@ class ResponseSignal(Enum):
     ADDED_IN_VECTORDB_SUCCESSFULLY="ADDED_IN_VECTORDB_SUCCESSFULLY"
     MADE_CHUNKS_SUCCESSFULY="MADE_CHUNKS_SUCCESSFULY"
     ERROR_IN_MAKE_CHUNKS="ERROR_IN_MAKE_CHUNKS"
+    ERROR_TO_FOUND_DATABASE_WHILE_ASKING="Vector Database not found. Please process and index your assets first."
+    SORRY_TO_FIND_RELEVANT_DATA="I'm sorry, I couldn't find any relevant information in the provided documents to answer your question.",
+    ERROR_WHILE_PROCESSING_QUESTION="An internal error occurred while processing your question."
+
+

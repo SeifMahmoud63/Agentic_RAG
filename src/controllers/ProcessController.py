@@ -5,7 +5,7 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.document_loaders import TextLoader
 from models import ProcessingEnum
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-
+from helpers import config
 
 
 class ProcessController(BaseController):
@@ -39,7 +39,7 @@ class ProcessController(BaseController):
             return loader.load()
             
 
-    def process(self,file_content:list,file_id:str,chunk_size:int=100,chunk_overlap:int=20):
+    def process(self,file_content:list,file_id:str,chunk_size:int=config.get_settings().chunk_size,chunk_overlap:int=config.get_settings().chunk_overlap):
             text_splitter=RecursiveCharacterTextSplitter(
                 chunk_overlap=chunk_overlap,
                 chunk_size=chunk_size

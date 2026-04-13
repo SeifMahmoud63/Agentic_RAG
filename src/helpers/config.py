@@ -1,6 +1,6 @@
 from pydantic_settings import BaseSettings,SettingsConfigDict
 from typing import Optional
-
+from functools import lru_cache
 
 class Settings(BaseSettings):
 
@@ -19,9 +19,13 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL_NAME :str ="sentence-transformers/all-MiniLM-L6-v2"
     persist_directory :str = "chroma_db"
     collection_name : str = "Files_1"
-    TOP_K_RERANKER : int =3
-    TOP_K_BM25 :int =3
-    TOP_K_HYBRID : int =3
+    TOP_K_RERANKER : int 
+    TOP_K_BM25 :int 
+    TOP_K_HYBRID : int 
+    chunk_overlap:int
+    chunk_size:int
+    REDIS_HOST : str
+    REDIS_PORT : int
 
     
     model_config=SettingsConfigDict(
@@ -30,6 +34,6 @@ class Settings(BaseSettings):
          extra="ignore"
     )
 
-
+@lru_cache()
 def get_settings():
     return Settings()
