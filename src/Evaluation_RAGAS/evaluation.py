@@ -7,17 +7,12 @@ from retriever import retrieve_chunks
 from embedding_model import emb_model
 from helpers import config
 from dotenv import load_dotenv
-from langchain_groq import ChatGroq
 
-
-
+from llm.llm import get_llm
 load_dotenv()
 settings = config.get_settings()
 
-llm = ChatGroq(
-    model=settings.MODEL_NAME,
-    api_key=settings.GROQ_API_KEY
-)
+llm = get_llm()
 
 def run_rag_evaluation(vector_store):
     test_questions = [

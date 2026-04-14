@@ -16,3 +16,9 @@ chromadb == 1.5.7
 flashrank == 0.2.10
 ragas == 0.4.3
 redis == 7.4.0
+ngrok == 1.7.0
+python-telegram-bot
+httpx
+langchain-cohere == 0.5.0
+langchain-google-genai
+pip install -U google-generativeai

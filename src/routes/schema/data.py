@@ -10,3 +10,4 @@ class ProcessRequest(BaseModel):
         default_factory=lambda: config.get_settings().chunk_overlap
     )
     file_ids: Optional[List[str]] = None
+    project_id: Optional[str] = None

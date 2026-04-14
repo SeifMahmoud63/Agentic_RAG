@@ -20,7 +20,8 @@ from langchain_groq import ChatGroq
 from dotenv import load_dotenv
 from Evaluation_RAGAS.evaluation import run_rag_evaluation
 from helpers import hash_utils
-
+from llm.llm import get_llm
+from helpers import clean_response
 
 logger = logging.getLogger('uvicorn.error')
 
@@ -76,66 +77,74 @@ async def upload_data(project_id: str, file: UploadFile,
 
 @data_router.post("/process-assets")
 async def process_assets_folder(process_request: ProcessRequest):
-
     base_ctrl = BaseController()
     base_path = base_ctrl.file_dir
-
     all_chunks = []
     
-    if not os.path.exists(base_path):
-        return JSONResponse(
-            status_code=status.HTTP_404_NOT_FOUND,
-            content={"message": f"Path {base_path} not found!"}
-        )
+    # If project_id is provided, only process that folder
+    if process_request.project_id:
+        target_folders = [process_request.project_id]
+    else:
+        # Otherwise, scan all folders
+        if not os.path.exists(base_path):
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"message": f"Path {base_path} not found!"}
+            )
+        target_folders = [f for f in os.listdir(base_path) if os.path.isdir(os.path.join(base_path, f))]
 
-    for project_folder in os.listdir(base_path):
+    for project_folder in target_folders:
+        controller = ProcessController(project_id=project_folder)
         project_path = os.path.join(base_path, project_folder)
         
-        if os.path.isdir(project_path):
-            controller = ProcessController(project_id=project_folder)
-            
-            files_to_process = process_request.file_ids or os.listdir(project_path)
-            
-            for f_id in files_to_process:
-                try:
-                    content = controller.get_content(file_id=f_id)
-                    
-                    if content:
-                        chunks = controller.process(
-                            file_content=content,
-                            file_id=f_id,
-                            chunk_size=process_request.chunk_size,
-                            chunk_overlap=process_request.chunk_overlap
-                        )
-                        if chunks:
-                            all_chunks.extend(chunks)
-                            
-                except Exception as e:
-                    print(f"Skipping {project_folder}/{f_id}: {e}")
-                    continue
+        if not os.path.exists(project_path):
+            continue
+
+        files_to_process = process_request.file_ids or os.listdir(project_path)
+        
+        for f_id in files_to_process:
+            try:
+                content = controller.get_content(file_id=f_id)
+                if content:
+                    chunks = controller.process(
+                        file_content=content,
+                        file_id=f_id,
+                        chunk_size=process_request.chunk_size,
+                        chunk_overlap=process_request.chunk_overlap
+                    )
+                    if chunks:
+                        all_chunks.extend(chunks)
+            except Exception as e:
+                logger.error(f"Skipping {project_folder}/{f_id}: {e}")
+                continue
 
     if all_chunks:
-
+        # Save to vector DB and invalidate cache (triggers multi-worker sync)
         result_signal, vector_store = database.vector_db(docs=all_chunks)
+        
+        # Small delay to ensure disk write is stable before workers read it
+        import time
+        time.sleep(0.5)
+        
+        from helpers.cache import invalidate_bm25_cache
+        invalidate_bm25_cache()
         
         return {
             "status": ResponseSignal.MADE_CHUNKS_SUCCESSFULY.value,
             "message": result_signal,
-            "total_chunks": len(set(hash_utils.generate_doc_hash(c.page_content) for c in all_chunks)),
+            "total_chunks": len(all_chunks),
         }
     
     return {
         "status": ResponseSignal.ERROR_IN_MAKE_CHUNKS.value,
+        "detail": "No chunks were generated (files might be missing or empty)"
     }
 
 
 load_dotenv()
 settings = get_settings()
 
-llm = ChatGroq(
-    model=settings.MODEL_NAME,
-    api_key=settings.GROQ_API_KEY
-)
+llm = get_llm()
 
 @data_router.post("/Ask_Q")
 async def ask_question(query: QuestionRequest):
@@ -153,16 +162,17 @@ async def ask_question(query: QuestionRequest):
 
         if not relevant_docs:
             return {
-                "query": query,
+                "query": query.query,
                 "answer": ResponseSignal.SORRY_TO_FIND_RELEVANT_DATA.value,
                 "sources": []
             }
 
         context_text = "\n\n".join([doc.page_content for doc in relevant_docs])
 
-        final_prompt = qa_prompt.format(context_text=context_text, query=query)
+        final_prompt = qa_prompt.format(context_text=context_text, query=query.query)
 
         response = llm.invoke(final_prompt) 
+        cleaned_answer = clean_response.clean_llm_response(response.content)
 
 
         sources = []
@@ -182,12 +192,10 @@ async def ask_question(query: QuestionRequest):
         return {
             "status": "success",
             "query": query.query, 
-            "answer": response.content,
+            "answer": cleaned_answer,
             "sources": sources
         }
     
-
-
     except Exception as e:
         print(f"Error in Ask_Q endpoint: {str(e)}")
         raise HTTPException(

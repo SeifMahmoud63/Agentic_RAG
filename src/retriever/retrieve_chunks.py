@@ -9,64 +9,102 @@ from helpers.redis import (
     acquire_lock,
     release_lock
 )
-from Prompts import HYDE_PROMPT, REWRITE_PROMPT
+from llm.llm import get_llm
+from dotenv import load_dotenv
 
+from Prompts import HYDE_PROMPT,qa_prompt,REWRITE_PROMPT
+import logging
+logger = logging.getLogger('uvicorn.error')
 settings = get_settings()
 
 
 class RetrievalManager:
     _bm25_retriever = None
+    _last_synced_version = None
+
+    @classmethod
+    def invalidate(cls):
+        """Resets the in-memory retriever singleton."""
+        cls._bm25_retriever = None
+        cls._last_synced_version = None
+        logger.info("--- [SYNC] In-memory BM25 invalidated ---")
 
     @classmethod
     def get_bm25(cls, vector_store, docs=None):
+        from helpers.redis import redis_client
+        from helpers.cache import BM25_VERSION_KEY
 
-        if cls._bm25_retriever is not None:
-            return cls._bm25_retriever
+        try:
+            redis_version = redis_client.get(BM25_VERSION_KEY)
+            if redis_version:
+                if isinstance(redis_version, bytes):
+                    redis_version = redis_version.decode('utf-8')
+                else:
+                    redis_version = str(redis_version)
+        except Exception as e:
+            logger.error(f"--- [SYNC] Redis version fetch failed: {e} ---")
+            redis_version = "error_fallback_" + str(time.time())
 
-        print("--- Loading BM25 using Redis cache ---")
 
-        stored_data = get_cached_docs()
+        needs_refresh = (
+            cls._bm25_retriever is None or 
+            redis_version != cls._last_synced_version
+        )
 
-        if stored_data is None:
+        if needs_refresh:
+            logger.info(f"--- [SYNC] BM25 Refresh Triggered: Local={cls._last_synced_version}, Redis={redis_version} ---")
+            
+            stored_data = get_cached_docs()
+            
+            # If no cached data in Redis, rebuild from vector store
+            if stored_data is None:
+                if acquire_lock():
+                    logger.info("--- [SYNC] Rebuilding BM25 docs from Vector Store ---")
+                    try:
+                        stored_data = vector_store.get()
+                        if not stored_data or not stored_data.get("documents"):
+                            logger.warning("--- [SYNC] Vector store is empty. BM25 will be empty. ---")
+                            stored_data = {"documents": [], "metadatas": []}
+                        cache_docs(stored_data)
+                    finally:
+                        release_lock()
+                else:
+                    # Wait for another worker to finish building
+                    logger.info("--- [SYNC] Waiting for another worker to rebuild cache ---")
+                    import time
+                    for _ in range(10): # Max 10 seconds wait
+                        time.sleep(1)
+                        stored_data = get_cached_docs()
+                        if stored_data: break
+            
+            if not stored_data:
+                stored_data = {"documents": [], "metadatas": []}
 
-            if acquire_lock():
+            docs = [
+                Document(page_content=text, metadata=meta)
+                for text, meta in zip(
+                    stored_data.get("documents", []),
+                    stored_data.get("metadatas", [])
+                )
+            ]
 
-                print("Building BM25 docs and caching...")
-
-                stored_data = vector_store.get()
-                cache_docs(stored_data)
-
-                release_lock()
-
+            if docs:
+                cls._bm25_retriever = BM25Retriever.from_documents(docs)
+                cls._bm25_retriever.k = settings.TOP_K_BM25
             else:
-                import time
-                while stored_data is None:
-                    time.sleep(1)
-                    stored_data = get_cached_docs()
-
-        docs = [
-            Document(page_content=text, metadata=meta)
-            for text, meta in zip(
-                stored_data["documents"],
-                stored_data["metadatas"]
-            )
-        ]
-
-        cls._bm25_retriever = BM25Retriever.from_documents(docs)
-        cls._bm25_retriever.k = settings.TOP_K_BM25
+                # Placeholder for empty case
+                cls._bm25_retriever = BM25Retriever.from_documents([Document(page_content="empty", metadata={})])
+            
+            cls._last_synced_version = redis_version
+            logger.info("--- [SYNC] BM25 Refresh Complete ---")
 
         return cls._bm25_retriever
 
 
-def get_llm():
-    return ChatGroq(
-        api_key=settings.GROQ_API_KEY,
-        model_name=settings.MODEL_NAME,
-    )
-
+load_dotenv()
+settings = get_settings()
 
 llm = get_llm()
-
 
 def rewrite_query(query: str):
     prompt = REWRITE_PROMPT.format(query=query)

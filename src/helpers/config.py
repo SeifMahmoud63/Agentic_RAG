@@ -6,7 +6,7 @@ class Settings(BaseSettings):
 
     GROQ_API_KEY:str
     FILE_ALLOWED_TYPES:str
-    MODEL_NAME : str ="llama-3.3-70b-versatile"
+    MODEL_NAME : str 
     LANGCHAIN_TRACING_V2: bool = True
     LANGCHAIN_API_KEY :str
     LANGCHAIN_PROJECT :str
@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     chunk_size:int
     REDIS_HOST : str
     REDIS_PORT : int
+    COHERE_API_KEY:str
+    GOOGLE_API_KEY:str
 
     
     model_config=SettingsConfigDict(
