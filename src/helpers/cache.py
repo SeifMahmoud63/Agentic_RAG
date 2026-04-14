@@ -12,7 +12,6 @@ def invalidate_bm25_cache():
     # 1. Delete the actual cached documents
     redis_client.delete(BM25_DOCS_KEY)
     
-    # 2. Update the version key with a new timestamp
     new_version = str(time.time())
     redis_client.set(BM25_VERSION_KEY, new_version)
     
