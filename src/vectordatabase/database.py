@@ -17,7 +17,7 @@ def filter_duplicates(vectorstore, docs):
     for doc in docs:
         doc_id = generate_doc_hash(doc.page_content, doc.metadata)
 
-        if doc_id not in existing_ids and doc_id not in seen_in_batch:  # ← CHECK BOTH
+        if doc_id not in existing_ids and doc_id not in seen_in_batch: 
             doc.metadata["id"] = doc_id
             new_docs.append(doc)
             new_ids.append(doc_id)
