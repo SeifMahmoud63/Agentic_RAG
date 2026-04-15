@@ -1,24 +1,31 @@
-fastapi == 0.135.1
-uvicorn[standard] == 0.41.0
-python-multipart==  0.0.22
-python-dotenv == 1.2.2
-pydantic-settings ==2.13.1
-langchain == 1.2.12
-pypdf == 6.9.1
-langchain-community == 0.4.1
-aiofiles == 25.1.0
-chromadb == 1.5.7
-langchain-groq == 1.1.2
-rank-bm25 == 0.2.2
-langchain-huggingface == 1.2.1
-sentence-transformers == 5.4.0
-chromadb == 1.5.7
-flashrank == 0.2.10
-ragas == 0.4.3
-redis == 7.4.0
-ngrok == 1.7.0
-python-telegram-bot
-httpx
-langchain-cohere == 0.5.0
+fastapi==0.135.1
+uvicorn[standard]==0.41.0
+python-multipart==0.0.22
+python-dotenv==1.2.2
+pydantic-settings==2.13.1
+
+langchain==1.2.12
+langchain-community==0.4.1
+langchain-huggingface==1.2.1
+langchain-groq==1.1.2
+langchain-cohere==0.5.0
 langchain-google-genai
-pip install -U google-generativeai
+langchain-core
+
+sentence-transformers==5.4.0
+google-generativeai
+
+chromadb==1.5.7
+rank-bm25==0.2.2
+flashrank==0.2.10
+
+ragas==0.4.3
+
+aiofiles==25.1.0
+httpx
+
+pypdf==6.9.1
+
+redis==7.4.0
+python-telegram-bot
+

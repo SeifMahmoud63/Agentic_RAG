@@ -21,9 +21,13 @@ from dotenv import load_dotenv
 from Evaluation_RAGAS.evaluation import run_rag_evaluation
 from helpers import hash_utils
 from llm.llm import get_llm
-from helpers import clean_response
+from helpers import clean_response,redis
+import time
+from retriever import retrieve_chunks
+
 
 logger = logging.getLogger('uvicorn.error')
+
 
 data_router = APIRouter(
     prefix="/api/v25/data",
@@ -57,6 +61,7 @@ async def upload_data(project_id: str, file: UploadFile,
         async with aiofiles.open(file_path, "wb") as f:
             while chunk := await file.read(app_settings.FILE_DEFAULT_CHUNK_SIZE):
                 await f.write(chunk)
+        RetrievalManager.force_reindex(v_store)
     except Exception as e:
 
         logger.error(f"Error while uploading file: {e}")
@@ -145,12 +150,81 @@ load_dotenv()
 settings = get_settings()
 
 llm = get_llm()
+v_store = database.vector_db()
 
+# @data_router.post("/Ask_Q")
+# async def ask_question(query: QuestionRequest):
+
+#     try:
+#         v_store = database.vector_db()
+        
+#         if v_store is None:
+#             raise HTTPException(
+#                 status_code=status.HTTP_404_NOT_FOUND,
+#                 detail=ResponseSignal.ERROR_TO_FOUND_DATABASE_WHILE_ASKING.value
+#             )
+
+#         relevant_docs = retrieve_chunks.advanced_retrieve(vector_store=v_store, query=query.query)
+
+#         if not relevant_docs:
+#             return {
+#                 "query": query.query,
+#                 "answer": ResponseSignal.SORRY_TO_FIND_RELEVANT_DATA.value,
+#                 "sources": []
+#             }
+
+#         context_text = "\n\n".join([doc.page_content for doc in relevant_docs])
+
+#         final_prompt = qa_prompt.format(context_text=context_text, query=query.query)
+
+#         response = llm.invoke(final_prompt) 
+#         cleaned_answer = clean_response.clean_llm_response(response.content)
+
+
+#         sources = []
+#         for doc in relevant_docs:
+#             clean_metadata = {}
+#             for key, value in doc.metadata.items():
+#                 if hasattr(value, "item"): 
+#                     clean_metadata[key] = value.item()
+#                 else:
+#                     clean_metadata[key] = value
+            
+#             sources.append({
+#                 "content": doc.page_content[:200] + "...", 
+#                 "metadata": clean_metadata
+#             })
+
+#         return {
+#             "status": "success",
+#             "query": query.query, 
+#             "answer": cleaned_answer,
+#             "sources": sources
+#         }
+    
+#     except Exception as e:
+#         print(f"Error in Ask_Q endpoint: {str(e)}")
+#         raise HTTPException(
+#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#             detail=ResponseSignal.ERROR_WHILE_PROCESSING_QUESTION.value)
+    
 @data_router.post("/Ask_Q")
 async def ask_question(query: QuestionRequest):
 
+
+    cached_response = redis.redis_client.get(query.query)
+    start_time = time.time()
+    if cached_response:
+        print(f"--- Cache hit : {time.time() - start_time:.2f}s")
+
+        return {"answer": cached_response, "source": "cache"}
     try:
+        overall_start = time.time() # بداية الرحلة
+
+        # 1. وقت الاتصال بالـ DB
+        start_time = time.time()
         v_store = database.vector_db()
+        print(f"--- DB Connection took: {time.time() - start_time:.2f}s")
         
         if v_store is None:
             raise HTTPException(
@@ -158,7 +232,11 @@ async def ask_question(query: QuestionRequest):
                 detail=ResponseSignal.ERROR_TO_FOUND_DATABASE_WHILE_ASKING.value
             )
 
+        # 2. وقت الـ Retrieval (ده المشتبه به الأول في الـ 60 ثانية)
+        start_time = time.time()
         relevant_docs = retrieve_chunks.advanced_retrieve(vector_store=v_store, query=query.query)
+    # ... باقي الكود
+        print(f"--- Retrieval (Search) took: {time.time() - start_time:.2f}s")
 
         if not relevant_docs:
             return {
@@ -167,13 +245,18 @@ async def ask_question(query: QuestionRequest):
                 "sources": []
             }
 
+        # 3. وقت تجهيز الـ Prompt
         context_text = "\n\n".join([doc.page_content for doc in relevant_docs])
-
         final_prompt = qa_prompt.format(context_text=context_text, query=query.query)
 
+        # 4. وقت الـ LLM (اللي LangSmith بيشوفه 5 ثواني)
+        start_time = time.time()
         response = llm.invoke(final_prompt) 
-        cleaned_answer = clean_response.clean_llm_response(response.content)
+        print(f"--- LLM Invoke took: {time.time() - start_time:.2f}s")
 
+        # 5. وقت التنظيف والمعالجة
+        start_time = time.time()
+        cleaned_answer = clean_response.clean_llm_response(response.content)
 
         sources = []
         for doc in relevant_docs:
@@ -188,6 +271,11 @@ async def ask_question(query: QuestionRequest):
                 "content": doc.page_content[:200] + "...", 
                 "metadata": clean_metadata
             })
+        print(f"--- Processing & Cleaning took: {time.time() - start_time:.2f}s")
+
+        redis.redis_client.setex(query.query, 3600, cleaned_answer)
+
+        print(f"=== TOTAL END-TO-END TIME: {time.time() - overall_start:.2f}s ===")
 
         return {
             "status": "success",
@@ -201,7 +289,7 @@ async def ask_question(query: QuestionRequest):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=ResponseSignal.ERROR_WHILE_PROCESSING_QUESTION.value)
-    
+
 
 @data_router.post("/Evaluate_RAG")
 async def evaluate_rag():
