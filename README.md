@@ -16,5 +16,8 @@ this is onther terminal and uvicorn in onther terminal
 TTL cahse in bm25
 
 
-
+uvicorn main:app --reload
 python bot/telegram_bot.py
+
+
+relevancy score / latency -> cache 75% and cache 0.1 (ttl = 1 H)
