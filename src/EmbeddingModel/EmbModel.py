@@ -1,4 +1,4 @@
-langchain_community.embeddings import HuggingFaceBgeEmbeddings
+from langchain_community.embeddings import HuggingFaceBgeEmbeddings
 from functools import lru_cache
 from helpers import config
 
