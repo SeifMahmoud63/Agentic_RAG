@@ -5,11 +5,11 @@ Tracks file identity (file_id + original_name + project_id) and content identity
 
 import sqlite3
 import os
-import logging
+from logs.logger import logger
 from datetime import datetime
 from typing import Optional, Dict, Any
 
-logger = logging.getLogger("uvicorn.error")
+
 
 # Database path: sits alongside the src directory
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "file_metadata.db")

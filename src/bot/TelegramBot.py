@@ -7,7 +7,10 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 from dotenv import load_dotenv
 
 
+import sys
 current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.dirname(current_dir))
+from models import ResponseSignal
 env_path = os.path.join(os.path.dirname(current_dir), ".env")
 load_dotenv(dotenv_path=env_path)
 
@@ -15,19 +18,10 @@ TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
 DEFAULT_PROJECT_ID = "telegram_uploads"
 
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
+from logs.logger import logger
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "**RAG Assistant Bot Active**\n\n"
-        "You can:\n"
-        "**Ask a Question**: Just type it here!\n"
-        "**Upload a Document**: Send a PDF or TXT file."
-    )
+    await update.message.reply_text(ResponseSignal.TG_BOT_ACTIVE_MSG.value)
 
 async def process_query(update: Update, context: ContextTypes.DEFAULT_TYPE, query: str):
     await update.message.reply_chat_action("typing")
@@ -43,7 +37,7 @@ async def process_query(update: Update, context: ContextTypes.DEFAULT_TYPE, quer
             
             if response.status_code == 200:
                 data = response.json()
-                answer = data.get("answer", "No answer found.")
+                answer = data.get("answer", ResponseSignal.TG_NO_ANSWER_FOUND.value)
                 try:
                     await update.message.reply_text(f"**Answer:**\n\n{answer}", parse_mode='Markdown')
                 except Exception as parse_err:
@@ -77,16 +71,16 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         audio_bytes = out.getvalue()
         
         if not audio_bytes:
-            await update.message.reply_text("Failed to download voice message.")
+            await update.message.reply_text(ResponseSignal.TG_FAILED_DOWNLOAD_VOICE.value)
             return
 
         # 2. Transcribe using Groq Whisper (native support for .ogg)
         groq_api_key = os.getenv("GROQ_API_KEY")
         if not groq_api_key:
-            await update.message.reply_text("STT Error: GROQ_API_KEY not configured in .env")
+            await update.message.reply_text(ResponseSignal.TG_STT_KEY_MISSING.value)
             return
             
-        await update.message.reply_text("🎙️ Transcribing voice message...")
+        await update.message.reply_text(ResponseSignal.TG_TRANSCRIBING_VOICE.value)
         
         async with httpx.AsyncClient() as client:
             files = {'file': ('voice.ogg', audio_bytes, 'audio/ogg')}
@@ -115,7 +109,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             query = transcription_data.get("text", "").strip()
             
             if not query:
-                await update.message.reply_text("Could not transcribe any clear speech.")
+                await update.message.reply_text(ResponseSignal.TG_NO_CLEAR_SPEECH.value)
                 return
             
             await update.message.reply_text(f"🗣️ Heard: {query}")
@@ -131,7 +125,7 @@ async def handle_file_upload(update: Update, context: ContextTypes.DEFAULT_TYPE)
     document = update.message.document
     
     if not document:
-        await update.message.reply_text("Please send a valid document (PDF/TXT).")
+        await update.message.reply_text(ResponseSignal.TG_SEND_VALID_DOC.value)
         return
 
     file_id = document.file_id
@@ -148,7 +142,7 @@ async def handle_file_upload(update: Update, context: ContextTypes.DEFAULT_TYPE)
         file_content = out.getvalue()
         
         if not file_content:
-            await update.message.reply_text("Failed to download file from Telegram.")
+            await update.message.reply_text(ResponseSignal.TG_FAILED_DOWNLOAD_FILE.value)
             return
 
         await update.message.reply_chat_action("upload_document")
@@ -177,7 +171,7 @@ async def handle_file_upload(update: Update, context: ContextTypes.DEFAULT_TYPE)
             internal_file_id = upload_data.get("file_id")
             
             # 3. Process the file
-            await update.message.reply_text("Indexing into database...")
+            await update.message.reply_text(ResponseSignal.TG_INDEXING_DB.value)
             logger.info(f"Processing file {internal_file_id}...")
             process_response = await client.post(
                 f"{API_BASE_URL}/api/v25/data/process-assets",

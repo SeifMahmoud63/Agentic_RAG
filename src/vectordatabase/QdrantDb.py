@@ -5,7 +5,7 @@ Dense vectors: Google Gemini embeddings (3072-dim)
 Sparse vectors: SPLADE via fastembed
 """
 
-import logging
+from logs.logger import logger
 import uuid
 from typing import List, Optional, Dict
 from functools import lru_cache
@@ -20,8 +20,9 @@ from langchain_core.documents import Document
 from helpers.config import get_settings
 from helpers.HashUtils import generate_doc_hash
 from EmbeddingModel import EmbModel
+from models import ResponseSignal
 
-logger = logging.getLogger("uvicorn.error")
+
 
 
 # ---------------------------------------------------------------------------
@@ -150,7 +151,7 @@ def upsert_chunks(
                     raise e
         
         if not batch_dense:
-            raise Exception("Failed to embed batch due to persistent errors.")
+            raise Exception(ResponseSignal.EMBEDDING_BATCH_FAILED.value)
 
         # 2. Sparse Embeddings (SPLADE - Local)
         # Processing in smaller batches prevents memory allocation crashes
@@ -334,7 +335,7 @@ def delete_by_file_id(file_id: str) -> int:
 # Hybrid search
 # ---------------------------------------------------------------------------
 
-def hybrid_search(query: str, top_k: Optional[int] = None) -> List[Document]:
+def hybrid_search(query: str, top_k: Optional[int] = None, dense_query: Optional[str] = None) -> List[Document]:
     """
     Perform hybrid search: dense (semantic) + sparse (keyword) with RRF fusion.
     Returns list of LangChain Document objects.
@@ -350,19 +351,18 @@ def hybrid_search(query: str, top_k: Optional[int] = None) -> List[Document]:
     dense_weight = settings.DENSE_SEARCH_WEIGHT
     sparse_weight = settings.SPARSE_SEARCH_WEIGHT
 
-    # Generate query vectors
     dense_model = EmbModel.get_embedding()
     sparse_model = get_sparse_model()
 
-    query_dense = dense_model.embed_query(query)
+    query_dense = dense_model.embed_query(dense_query or query)
     query_sparse_raw = list(sparse_model.embed([query]))[0]
     query_sparse = models.SparseVector(
         indices=query_sparse_raw.indices.tolist(),
         values=query_sparse_raw.values.tolist(),
     )
 
-    # Prefetch limits (fetch more candidates than final top_k for better fusion)
-    prefetch_limit = top_k * 3
+    # Prefetch exactly top_k candidates from each strategy
+    prefetch_limit = top_k
 
     results = client.query_points(
         collection_name=collection_name,

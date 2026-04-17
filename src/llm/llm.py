@@ -26,7 +26,7 @@ def get_llm():
     settings = get_settings()
     return ThrottledChatCohere(
         model=settings.MODEL_NAME,
-        api_key=settings.COHERE_API_KEY,
+        cohere_api_key=settings.COHERE_API_KEY,
         max_tokens=2048,
         temperature=0
     )

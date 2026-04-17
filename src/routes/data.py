@@ -8,7 +8,7 @@ from controllers.BaseController import BaseController
 from fastapi import HTTPException, status
 import aiofiles
 from models import ResponseSignal
-import logging
+from logs.logger import logger
 from .schema.data import ProcessRequest
 from retriever import RetrieveChunks
 from prompts import QaPrompt
@@ -26,7 +26,7 @@ from fastapi.responses import StreamingResponse
 import json
 import redis as redis_lib
 
-logger = logging.getLogger('uvicorn.error')
+
 
 
 data_router = APIRouter(
@@ -106,7 +106,7 @@ async def process_assets_folder(process_request: ProcessRequest):
         if not os.path.exists(base_path):
             return JSONResponse(
                 status_code=status.HTTP_404_NOT_FOUND,
-                content={"message": f"Path {base_path} not found!"}
+                content={"message": ResponseSignal.PATH_NOT_FOUND.value.format(base_path=base_path)}
             )
         target_folders = [f for f in os.listdir(base_path) if os.path.isdir(os.path.join(base_path, f))]
 
@@ -138,7 +138,7 @@ async def process_assets_folder(process_request: ProcessRequest):
                     pass
                 
                 results.append({
-                    "status": "error",
+                    "status": ResponseSignal.STATUS_ERROR.value,
                     "file_id": f_id,
                     "detail": str(e),
                 })
@@ -169,14 +169,14 @@ async def process_assets_folder(process_request: ProcessRequest):
         }
     elif skipped and not errors:
         return {
-            "status": "all_skipped",
-            "detail": "All files were already indexed (hash duplicates).",
+            "status": ResponseSignal.STATUS_ALL_SKIPPED.value,
+            "detail": ResponseSignal.ALL_SKIPPED_DUPLICATE.value,
             "details": results,
         }
     
     return {
         "status": ResponseSignal.ERROR_IN_MAKE_CHUNKS.value,
-        "detail": "No chunks were generated.",
+        "detail": ResponseSignal.NO_CHUNKS_GENERATED.value,
         "details": results,
     }
 
@@ -206,7 +206,7 @@ def ask_question(query: QuestionRequest):
             return {
                 "query": query.query,
                 "answer": CleanResponse.clean_llm_response(cached_answer),
-                "cache_status": "hit"
+                "cache_status": ResponseSignal.CACHE_HIT.value
             }
 
 
@@ -230,9 +230,9 @@ def ask_question(query: QuestionRequest):
         agent_messages = [msg for msg in final_state["messages"] if isinstance(msg, AIMessage)]
         if agent_messages:
             text_responses = [msg.content for msg in agent_messages if msg.content.strip()]
-            agent_response = text_responses[-1] if text_responses else "I'm sorry, I couldn't generate a clear answer."
+            agent_response = text_responses[-1] if text_responses else ResponseSignal.COULDNT_GENERATE_ANSWER.value
         else:
-            agent_response = "I'm sorry, I couldn't reach a conclusion."
+            agent_response = ResponseSignal.COULDNT_REACH_CONCLUSION.value
 
         cleaned_answer = CleanResponse.clean_llm_response(agent_response)
 
@@ -245,7 +245,7 @@ def ask_question(query: QuestionRequest):
         return {
             "query": query.query,
             "answer": cleaned_answer,
-            "cache_status": "miss"
+            "cache_status": ResponseSignal.CACHE_MISS.value
         }
     
     except Exception as e:
@@ -263,7 +263,7 @@ def reset_cache():
         
         r = redis_lib.Redis(host=settings.REDIS_HOST, port=settings.REDIS_PORT)
         r.flushall()
-        return {"status": "success", "message": "Semantic cache cleared successfully."}
+        return {"status": ResponseSignal.STATUS_SUCCESS.value, "message": ResponseSignal.SEMANTIC_CACHE_CLEARED.value}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to clear cache: {str(e)}")
 
@@ -281,7 +281,7 @@ def evaluate_rag():
         }
         
         return {
-            "status": "success",
+            "status": ResponseSignal.STATUS_SUCCESS.value,
             "overall_scores": summary,
             "detailed_results": df_results.to_dict(orient="records")
         }

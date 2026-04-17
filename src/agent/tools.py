@@ -2,6 +2,7 @@ from langchain_core.tools import tool
 from langchain_community.retrievers.tavily_search_api import TavilySearchAPIRetriever
 from retriever.RetrieveChunks import advanced_retrieve 
 from helpers import config
+from models import ResponseSignal
 
 tavily_retriever = TavilySearchAPIRetriever(k=config.get_settings().TOP_K_TAVILY)
 
@@ -12,7 +13,7 @@ def Search_Local_Documents(query: str) -> str:
     results = advanced_retrieve(query=query)
     print(f"--- [TOOL CALL] Search_Local_Documents found {len(results)} results ---")
     if not results:
-        return "No relevant information found in local documents."
+        return ResponseSignal.NO_LOCAL_INFO.value
     
     return "\n\n".join([f"Source: {doc.metadata.get('source', 'Unknown')}\n{doc.page_content}" for doc in results])
 
@@ -21,7 +22,7 @@ def Tavily_Tool(query: str) -> str:
     """Useful for general knowledge, current events, or information not found in local documents."""
     docs = tavily_retriever.invoke(query)
     if not docs:
-        return "No results found on the internet."
+        return ResponseSignal.NO_INTERNET_INFO.value
     
     return "\n\n".join([f"Source: {doc.metadata.get('url', 'Internet')}\n{doc.page_content}" for doc in docs])
 

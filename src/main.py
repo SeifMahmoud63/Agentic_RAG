@@ -2,9 +2,7 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from routes import base, data
 from helpers import config
-import logging
-
-logger = logging.getLogger("uvicorn.error")
+from logs.logger import logger
 from helpers import redis
 
 @asynccontextmanager

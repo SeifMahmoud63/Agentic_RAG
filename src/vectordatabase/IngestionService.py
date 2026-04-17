@@ -5,7 +5,7 @@ Separated from API routes for cleaner architecture, testability, and reuse by bo
 """
 
 import os
-import logging
+from logs.logger import logger
 from typing import List, Optional, Dict, Any
 
 from langchain_core.documents import Document
@@ -15,7 +15,7 @@ from helpers.config import get_settings
 from controllers.ProcessController import ProcessController
 from VectorDatabase import QdrantDb, MetadataStore
 
-logger = logging.getLogger("uvicorn.error")
+
 
 
 def ingest_file(
