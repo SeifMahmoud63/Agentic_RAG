@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     QDRANT_HOST: str = "localhost"
     QDRANT_PORT: int = 6333
     QDRANT_COLLECTION: str = "rag_documents"
+    GROQ_API_KEY:str
 
     DENSE_SEARCH_WEIGHT: float
     SPARSE_SEARCH_WEIGHT: float 
