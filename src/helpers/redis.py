@@ -1,39 +1,24 @@
-import redis
-import json
 from helpers.config import get_settings
+from EmbeddingModel import EmbModel
+from .SemanticCache import ManualSemanticCache
 
 settings = get_settings()
 
-redis_client = redis.Redis(
-    host=settings.REDIS_HOST,
-    port=settings.REDIS_PORT,
-    db=0,
-    decode_responses=True
-)
+_global_cache = None
 
-BM25_DOCS_KEY = "bm25:documents"
-
-
-def get_cached_docs():
-    data = redis_client.get(BM25_DOCS_KEY)
-
-    if data:
-        return json.loads(data)
-
-    return None
-
-
-def cache_docs(data):
-    redis_client.set(
-        BM25_DOCS_KEY,
-        json.dumps(data),
-        ex=3600
+def init_cache():
+    global _global_cache
+    # Using our manual, ultra-stable semantic cache
+    _global_cache = ManualSemanticCache(
+        redis_url=f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}",
+        embedding_model=EmbModel.get_embedding(),
+        score_threshold=0.92
     )
+    return _global_cache
 
-
-def acquire_lock(lock_name="bm25_lock", timeout=30):
-    return redis_client.set(lock_name, "1", nx=True, ex=timeout)
-
-
-def release_lock(lock_name="bm25_lock"):
-    redis_client.delete(lock_name)
+def get_cache():
+    """Returns the initialized semantic cache or initializes it if necessary."""
+    global _global_cache
+    if _global_cache is None:
+        return init_cache()
+    return _global_cache

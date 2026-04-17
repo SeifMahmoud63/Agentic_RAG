@@ -4,27 +4,27 @@ import os
 from helpers.config import get_settings, Settings
 from controllers.DataController import DataController
 from controllers.ProjectController import ProjectController
-from controllers.ProcessController import ProcessController
 from controllers.BaseController import BaseController
-from vectordatabase import database
 from fastapi import HTTPException, status
 import aiofiles
 from models import ResponseSignal
 import logging
 from .schema.data import ProcessRequest
-from vectordatabase import database
-from retriever import retrieve_chunks
-from Prompts import qa_prompt
-from query_schema import QuestionRequest
-from langchain_groq import ChatGroq
+from retriever import RetrieveChunks
+from prompts import QaPrompt
+from QuerySchema import QuestionRequest
 from dotenv import load_dotenv
-from Evaluation_RAGAS.evaluation import run_rag_evaluation
-from helpers import hash_utils
+from EvaluationRagas.evaluation import run_rag_evaluation
 from llm.llm import get_llm
-from helpers import clean_response,redis
+from helpers import CleanResponse, redis
+from VectorDatabase import IngestionService, QdrantDb
 import time
-from retriever import retrieve_chunks
-
+from langchain_core.outputs import Generation
+from langchain_core.messages import HumanMessage, AIMessage
+from agent.graph import graph
+from fastapi.responses import StreamingResponse
+import json
+import redis as redis_lib
 
 logger = logging.getLogger('uvicorn.error')
 
@@ -61,10 +61,15 @@ async def upload_data(project_id: str, file: UploadFile,
         async with aiofiles.open(file_path, "wb") as f:
             while chunk := await file.read(app_settings.FILE_DEFAULT_CHUNK_SIZE):
                 await f.write(chunk)
-        RetrievalManager.force_reindex(v_store)
     except Exception as e:
 
         logger.error(f"Error while uploading file: {e}")
+        # Automatic cache reset on error
+        try:
+            cache = redis.get_cache()
+            cache.clear()
+        except:
+            pass
 
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -73,10 +78,17 @@ async def upload_data(project_id: str, file: UploadFile,
             }
         )
 
+    try:
+        cache = redis.get_cache()
+        cache.clear()
+    except Exception as e:
+        logger.warning(f"Failed to clear cache during upload: {e}")
+
     return JSONResponse(
             content={
                 "signal": ResponseSignal.FILE_VALIDATION_SUCC.value,
-                "file_id": file_id
+                "file_id": file_id,
+                "original_name": file.filename,
             }
         )
 
@@ -84,7 +96,7 @@ async def upload_data(project_id: str, file: UploadFile,
 async def process_assets_folder(process_request: ProcessRequest):
     base_ctrl = BaseController()
     base_path = base_ctrl.file_dir
-    all_chunks = []
+    results = []
     
     # If project_id is provided, only process that folder
     if process_request.project_id:
@@ -99,7 +111,6 @@ async def process_assets_folder(process_request: ProcessRequest):
         target_folders = [f for f in os.listdir(base_path) if os.path.isdir(os.path.join(base_path, f))]
 
     for project_folder in target_folders:
-        controller = ProcessController(project_id=project_folder)
         project_path = os.path.join(base_path, project_folder)
         
         if not os.path.exists(project_path):
@@ -109,40 +120,64 @@ async def process_assets_folder(process_request: ProcessRequest):
         
         for f_id in files_to_process:
             try:
-                content = controller.get_content(file_id=f_id)
-                if content:
-                    chunks = controller.process(
-                        file_content=content,
-                        file_id=f_id,
-                        chunk_size=process_request.chunk_size,
-                        chunk_overlap=process_request.chunk_overlap
-                    )
-                    if chunks:
-                        all_chunks.extend(chunks)
+                result = IngestionService.ingest_file(
+                    file_id=f_id,
+                    original_name=f_id,
+                    project_id=project_folder,
+                    chunk_size=process_request.chunk_size,
+                    chunk_overlap=process_request.chunk_overlap,
+                )
+                results.append(result)
             except Exception as e:
                 logger.error(f"Skipping {project_folder}/{f_id}: {e}")
+                # Automatic cache reset on error
+                try:
+                    cache = redis.get_cache()
+                    cache.clear()
+                except:
+                    pass
+                
+                results.append({
+                    "status": "error",
+                    "file_id": f_id,
+                    "detail": str(e),
+                })
                 continue
 
-    if all_chunks:
-        # Save to vector DB and invalidate cache (triggers multi-worker sync)
-        result_signal, vector_store = database.vector_db(docs=all_chunks)
-        
-        # Small delay to ensure disk write is stable before workers read it
-        import time
-        time.sleep(0.5)
-        
-        from helpers.cache import invalidate_bm25_cache
-        invalidate_bm25_cache()
-        
+    # Summarize results
+    successful = [r for r in results if r.get("status") == "success"]
+    skipped = [r for r in results if r.get("status") == "skipped"]
+    errors = [r for r in results if r.get("status") == "error"]
+
+    # Always clear cache after asset processing to ensure the RAG sees new data
+    try:
+        cache = redis.get_cache()
+        cache.clear()
+    except Exception as e:
+        logger.warning(f"Failed to clear cache after processing: {e}")
+
+    total_chunks = sum(r.get("sync_details", {}).get("total", 0) for r in successful)
+
+    if successful:
         return {
             "status": ResponseSignal.MADE_CHUNKS_SUCCESSFULY.value,
-            "message": result_signal,
-            "total_chunks": len(all_chunks),
+            "total_chunks": total_chunks,
+            "ingested": len(successful),
+            "skipped": len(skipped),
+            "errors": len(errors),
+            "details": results,
+        }
+    elif skipped and not errors:
+        return {
+            "status": "all_skipped",
+            "detail": "All files were already indexed (hash duplicates).",
+            "details": results,
         }
     
     return {
         "status": ResponseSignal.ERROR_IN_MAKE_CHUNKS.value,
-        "detail": "No chunks were generated (files might be missing or empty)"
+        "detail": "No chunks were generated.",
+        "details": results,
     }
 
 
@@ -150,138 +185,67 @@ load_dotenv()
 settings = get_settings()
 
 llm = get_llm()
-v_store = database.vector_db()
 
-# @data_router.post("/Ask_Q")
-# async def ask_question(query: QuestionRequest):
-
-#     try:
-#         v_store = database.vector_db()
-        
-#         if v_store is None:
-#             raise HTTPException(
-#                 status_code=status.HTTP_404_NOT_FOUND,
-#                 detail=ResponseSignal.ERROR_TO_FOUND_DATABASE_WHILE_ASKING.value
-#             )
-
-#         relevant_docs = retrieve_chunks.advanced_retrieve(vector_store=v_store, query=query.query)
-
-#         if not relevant_docs:
-#             return {
-#                 "query": query.query,
-#                 "answer": ResponseSignal.SORRY_TO_FIND_RELEVANT_DATA.value,
-#                 "sources": []
-#             }
-
-#         context_text = "\n\n".join([doc.page_content for doc in relevant_docs])
-
-#         final_prompt = qa_prompt.format(context_text=context_text, query=query.query)
-
-#         response = llm.invoke(final_prompt) 
-#         cleaned_answer = clean_response.clean_llm_response(response.content)
-
-
-#         sources = []
-#         for doc in relevant_docs:
-#             clean_metadata = {}
-#             for key, value in doc.metadata.items():
-#                 if hasattr(value, "item"): 
-#                     clean_metadata[key] = value.item()
-#                 else:
-#                     clean_metadata[key] = value
-            
-#             sources.append({
-#                 "content": doc.page_content[:200] + "...", 
-#                 "metadata": clean_metadata
-#             })
-
-#         return {
-#             "status": "success",
-#             "query": query.query, 
-#             "answer": cleaned_answer,
-#             "sources": sources
-#         }
-    
-#     except Exception as e:
-#         print(f"Error in Ask_Q endpoint: {str(e)}")
-#         raise HTTPException(
-#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-#             detail=ResponseSignal.ERROR_WHILE_PROCESSING_QUESTION.value)
-    
 @data_router.post("/Ask_Q")
-async def ask_question(query: QuestionRequest):
-
-
-    cached_response = redis.redis_client.get(query.query)
-    start_time = time.time()
-    if cached_response:
-        print(f"--- Cache hit : {time.time() - start_time:.2f}s")
-
-        return {"answer": cached_response, "source": "cache"}
+def ask_question(query: QuestionRequest):
     try:
-        overall_start = time.time() # بداية الرحلة
-
-        # 1. وقت الاتصال بالـ DB
-        start_time = time.time()
-        v_store = database.vector_db()
-        print(f"--- DB Connection took: {time.time() - start_time:.2f}s")
+        overall_start = time.time()
         
-        if v_store is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=ResponseSignal.ERROR_TO_FOUND_DATABASE_WHILE_ASKING.value
-            )
+        # 1. Check Semantic Cache first
+        cache = redis.get_cache()
+        clean_query = query.query.strip()
+        
+        try:
+            cached_answer = cache.lookup(clean_query)
+        except Exception as e:
+            logger.warning(f"Manual cache lookup failed: {e}")
+            cached_answer = None
 
-        # 2. وقت الـ Retrieval (ده المشتبه به الأول في الـ 60 ثانية)
-        start_time = time.time()
-        relevant_docs = retrieve_chunks.advanced_retrieve(vector_store=v_store, query=query.query)
-    # ... باقي الكود
-        print(f"--- Retrieval (Search) took: {time.time() - start_time:.2f}s")
-
-        if not relevant_docs:
+        if cached_answer:
+            print(f"--- [QUERY CACHE HIT] Total time: {time.time() - overall_start:.2f}s")
             return {
                 "query": query.query,
-                "answer": ResponseSignal.SORRY_TO_FIND_RELEVANT_DATA.value,
-                "sources": []
+                "answer": CleanResponse.clean_llm_response(cached_answer),
+                "cache_status": "hit"
             }
 
-        # 3. وقت تجهيز الـ Prompt
-        context_text = "\n\n".join([doc.page_content for doc in relevant_docs])
-        final_prompt = qa_prompt.format(context_text=context_text, query=query.query)
 
-        # 4. وقت الـ LLM (اللي LangSmith بيشوفه 5 ثواني)
-        start_time = time.time()
-        response = llm.invoke(final_prompt) 
-        print(f"--- LLM Invoke took: {time.time() - start_time:.2f}s")
+        import uuid
+        session_id = getattr(query, "project_id", "global_memory_session")
+        config_run = {"configurable": {"thread_id": session_id}}
+        
+        input_state = {"messages": [HumanMessage(content=clean_query)]}
+        
+        try:
+            final_state = graph.invoke(input_state, config=config_run)
+        except Exception as e:
+            # If the stable memory causes a 400 error (history corruption), we rescue by resetting once.
+            if "400" in str(e) or "invalid request" in str(e).lower():
+                logger.warning(f"Detected memory corruption in session '{session_id}'. Resetting...")
+                reset_config = {"configurable": {"thread_id": f"reset_{str(uuid.uuid4())[:8]}"}}
+                final_state = graph.invoke(input_state, config=reset_config)
+            else:
+                raise e
 
-        # 5. وقت التنظيف والمعالجة
-        start_time = time.time()
-        cleaned_answer = clean_response.clean_llm_response(response.content)
+        agent_messages = [msg for msg in final_state["messages"] if isinstance(msg, AIMessage)]
+        if agent_messages:
+            text_responses = [msg.content for msg in agent_messages if msg.content.strip()]
+            agent_response = text_responses[-1] if text_responses else "I'm sorry, I couldn't generate a clear answer."
+        else:
+            agent_response = "I'm sorry, I couldn't reach a conclusion."
 
-        sources = []
-        for doc in relevant_docs:
-            clean_metadata = {}
-            for key, value in doc.metadata.items():
-                if hasattr(value, "item"): 
-                    clean_metadata[key] = value.item()
-                else:
-                    clean_metadata[key] = value
-            
-            sources.append({
-                "content": doc.page_content[:200] + "...", 
-                "metadata": clean_metadata
-            })
-        print(f"--- Processing & Cleaning took: {time.time() - start_time:.2f}s")
+        cleaned_answer = CleanResponse.clean_llm_response(agent_response)
 
-        redis.redis_client.setex(query.query, 3600, cleaned_answer)
+        try:
+            cache.update(clean_query, cleaned_answer)
+        except Exception as e:
+            logger.warning(f"Manual cache update failed: {e}")
 
         print(f"=== TOTAL END-TO-END TIME: {time.time() - overall_start:.2f}s ===")
-
         return {
-            "status": "success",
-            "query": query.query, 
+            "query": query.query,
             "answer": cleaned_answer,
-            "sources": sources
+            "cache_status": "miss"
         }
     
     except Exception as e:
@@ -291,27 +255,36 @@ async def ask_question(query: QuestionRequest):
             detail=ResponseSignal.ERROR_WHILE_PROCESSING_QUESTION.value)
 
 
-@data_router.post("/Evaluate_RAG")
-async def evaluate_rag():
+@data_router.post("/reset-cache")
+def reset_cache():
     try:
-        v_store = database.vector_db()
+        cache = redis.get_cache()
+
         
-        if v_store is None:
-            raise HTTPException(status_code=404, detail="Database not found")
+        r = redis_lib.Redis(host=settings.REDIS_HOST, port=settings.REDIS_PORT)
+        r.flushall()
+        return {"status": "success", "message": "Semantic cache cleared successfully."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to clear cache: {str(e)}")
 
-        df_results = run_rag_evaluation(v_store)
+
+@data_router.post("/Evaluate_RAG")
+def evaluate_rag():
+    try:
+        df_results = run_rag_evaluation()
+        
         df_results = df_results.fillna(0)
-
-
-        summary = df_results[["faithfulness", "answer_relevancy"]].mean().to_dict()
-        detailed = df_results.to_dict(orient="records")
-
+        
+        summary = {
+            "faithfulness": df_results["faithfulness"].mean(),
+            "answer_relevancy": df_results["answer_relevancy"].mean()
+        }
+        
         return {
             "status": "success",
             "overall_scores": summary,
-            "detailed_results": detailed
+            "detailed_results": df_results.to_dict(orient="records")
         }
 
     except Exception as e:
-        print(f"Eval Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Eval Error: {str(e)}")

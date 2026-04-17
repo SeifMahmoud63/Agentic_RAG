@@ -15,8 +15,7 @@ langchain-core
 sentence-transformers==5.4.0
 google-generativeai
 
-chromadb==1.5.7
-rank-bm25==0.2.2
+qdrant-client[fastembed]
 flashrank==0.2.10
 
 ragas==0.4.3
@@ -26,6 +25,9 @@ httpx
 
 pypdf==6.9.1
 
-redis==7.4.0
+redis==4.5.5
 python-telegram-bot
+tavily-python == 0.7.23
+langgraph == 1.1.6
 
+langgraph-checkpoint-sqlite ==  3.0.3

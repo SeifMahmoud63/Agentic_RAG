@@ -4,30 +4,41 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
 
-    GROQ_API_KEY:str
     FILE_ALLOWED_TYPES:str
     MODEL_NAME : str 
-    LANGCHAIN_TRACING_V2: bool = True
+    LANGCHAIN_TRACING_V2: bool 
     LANGCHAIN_API_KEY :str
     LANGCHAIN_PROJECT :str
-    LANGCHAIN_ENDPOINT : str = "https://api.smith.langchain.com"
+    LANGCHAIN_ENDPOINT : str 
     FILE_ALLOWED_TYPES :list
     FILE_MAX_SIZE : int
     APP_NAME:str
     APP_VERSION : str
     FILE_DEFAULT_CHUNK_SIZE : int
-    EMBEDDING_MODEL_NAME :str ="sentence-transformers/all-MiniLM-L6-v2"
-    persist_directory :str = "chroma_db"
-    collection_name : str = "Files_1"
+    EMBEDDING_MODEL_NAME :str 
+    FLASH_MODEL_RERANKER: str
+    fLASH_CACHE_DIR:str
     TOP_K_RERANKER : int 
     TOP_K_BM25 :int 
     TOP_K_HYBRID : int 
     chunk_overlap:int
     chunk_size:int
+    TOP_K_TAVILY :str
     REDIS_HOST : str
     REDIS_PORT : int
     COHERE_API_KEY:str
+    TAVILY_API_KEY:str
+    SPLADEE_MODEL_NAME :str
     GOOGLE_API_KEY:str
+
+    QDRANT_HOST: str = "localhost"
+    QDRANT_PORT: int = 6333
+    QDRANT_COLLECTION: str = "rag_documents"
+
+    DENSE_SEARCH_WEIGHT: float
+    SPARSE_SEARCH_WEIGHT: float 
+
+    MAX_RETRIES: int = 5
 
     
     model_config=SettingsConfigDict(
