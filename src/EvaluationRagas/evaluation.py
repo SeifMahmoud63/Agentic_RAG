@@ -13,15 +13,12 @@ import time
 load_dotenv()
 settings = config.get_settings()
 
-# =============================
-# Chatbot LLM (Answer Generator)
-# =============================
+
 llm = get_llm()
 
 
 def run_rag_evaluation():
 
-    # ⚠️ أثناء التطوير قلل الأسئلة لتجنب Rate Limit
     test_questions = [
         "What is the major of seif mahmoud ?",
         "what is email yassein ahmed ? .",
@@ -29,7 +26,7 @@ def run_rag_evaluation():
         "what is phone number of youssab kamel ?",
         "what is salma loves ?",
         "what is email of youssab kamal ?"
-    ][:3]   # DEV LIMIT
+    ][:3]   
 
     embeddings = EmbModel.get_embedding()
 
@@ -37,12 +34,10 @@ def run_rag_evaluation():
 
     for question in test_questions:
 
-        # =============================
-        # Retrieve (limit chunks)
-        # =============================
+
         retrieved_docs = RetrieveChunks.advanced_retrieve(
             query=question
-        )[:3]   # prevent large payload
+        )[:3]   
 
         MAX_CONTEXT_CHARS = 300
 
@@ -63,12 +58,9 @@ Question:
 Answer:
 """
 
-        # =============================
-        # Generate Answer
-        # =============================
+
         answer = llm.invoke(full_prompt)
 
-        # prevent very long responses
         answer_text = answer.content[:600]
 
         samples.append({
@@ -77,16 +69,12 @@ Answer:
             "response": answer_text,
         })
 
-        # 🔥 IMPORTANT → avoid Cohere rate limit
         time.sleep(2)
 
     dataset = EvaluationDataset.from_list(samples)
 
-    # =============================
-    # Groq Judge LLM (LIGHT MODEL)
-    # =============================
     eval_llm = ChatGroq(
-        model="llama-3.1-8b-instant",   # ✅ avoids 429
+        model="llama-3.1-8b-instant",  
         temperature=0,
         max_tokens=1024,
         n=1
@@ -95,9 +83,6 @@ Answer:
     ragas_llm = LangchainLLMWrapper(eval_llm)
     ragas_embeddings = LangchainEmbeddingsWrapper(embeddings)
 
-    # =============================
-    # Evaluation
-    # =============================
     results = evaluate(
         dataset=dataset,
         metrics=[
@@ -110,7 +95,7 @@ Answer:
             max_workers=1,
             timeout=300,
             max_retries=20,
-            max_wait=5   # ✅ rate limit protection
+            max_wait=5 
         )
     )
 

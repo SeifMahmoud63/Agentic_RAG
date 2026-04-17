@@ -29,11 +29,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "**Upload a Document**: Send a PDF or TXT file."
     )
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.message.text
-    if not query:
-        return
-
+async def process_query(update: Update, context: ContextTypes.DEFAULT_TYPE, query: str):
     await update.message.reply_chat_action("typing")
 
     async with httpx.AsyncClient() as client:
@@ -57,8 +53,79 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.error(f"API Error ({response.status_code}): {response.text}")
                 await update.message.reply_text(f"API Error ({response.status_code}): {response.text[:100]}")
         except Exception as e:
-            logger.error(f"Exception in handle_message: {str(e)}")
+            logger.error(f"Exception in process_query: {str(e)}")
             await update.message.reply_text(f"Error: {str(e)}")
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.message.text
+    if not query:
+        return
+    await process_query(update, context, query)
+
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    voice = update.message.voice
+    if not voice:
+        return
+
+    try:
+        # 1. Download voice file from Telegram natively (.ogg file)
+        logger.info(f"Downloading voice message {voice.file_id}...")
+        new_file = await context.bot.get_file(voice.file_id)
+        
+        out = io.BytesIO()
+        await new_file.download_to_memory(out)
+        audio_bytes = out.getvalue()
+        
+        if not audio_bytes:
+            await update.message.reply_text("Failed to download voice message.")
+            return
+
+        # 2. Transcribe using Groq Whisper (native support for .ogg)
+        groq_api_key = os.getenv("GROQ_API_KEY")
+        if not groq_api_key:
+            await update.message.reply_text("STT Error: GROQ_API_KEY not configured in .env")
+            return
+            
+        await update.message.reply_text("🎙️ Transcribing voice message...")
+        
+        async with httpx.AsyncClient() as client:
+            files = {'file': ('voice.ogg', audio_bytes, 'audio/ogg')}
+            # Force the Whisper model to output English transcription
+            data = {
+                'model': 'whisper-large-v3',
+                'language': 'en'
+            }
+            headers = {'Authorization': f'Bearer {groq_api_key}'}
+            
+            logger.info("Sending audio to Groq Whisper API...")
+            transcription_response = await client.post(
+                "https://api.groq.com/openai/v1/audio/transcriptions",
+                files=files,
+                data=data,
+                headers=headers,
+                timeout=60.0
+            )
+            
+            if transcription_response.status_code != 200:
+                logger.error(f"Transcription failed: {transcription_response.text}")
+                await update.message.reply_text(f"Transcription Failed: {transcription_response.text[:100]}")
+                return
+                
+            transcription_data = transcription_response.json()
+            query = transcription_data.get("text", "").strip()
+            
+            if not query:
+                await update.message.reply_text("Could not transcribe any clear speech.")
+                return
+            
+            await update.message.reply_text(f"🗣️ Heard: {query}")
+            
+            # 3. Process transcribed query through standard RAG pipeline
+            await process_query(update, context, query)
+            
+    except Exception as e:
+        logger.error(f"Exception during voice processing: {str(e)}")
+        await update.message.reply_text(f"Voice Processing Error: {str(e)}")
 
 async def handle_file_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     document = update.message.document
@@ -152,7 +219,7 @@ def run_bot():
     
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
-    
+    application.add_handler(MessageHandler(filters.VOICE, handle_voice))
     application.add_handler(MessageHandler(filters.Document.ALL, handle_file_upload))
     
     print(f"--- Telegram Bot Starting (API: {API_BASE_URL}) ---")
