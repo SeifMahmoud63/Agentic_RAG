@@ -1,8 +1,13 @@
-from langchain_community.embeddings import HuggingFaceBgeEmbeddings
+langchain_community.embeddings import HuggingFaceBgeEmbeddings
+from functools import lru_cache
 from helpers import config
 
-
-embedding_model = HuggingFaceBgeEmbeddings(model_name=config.get_settings().EMBEDDING_MODEL_NAME)
+@lru_cache(maxsize=1)
 
 def get_embedding():
-    return embedding_model
+
+    return HuggingFaceBgeEmbeddings(
+
+        model_name=config.get_settings().EMBEDDING_MODEL_NAME
+
+    )
