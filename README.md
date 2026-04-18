@@ -81,7 +81,6 @@ The system is continuously evaluated using the **Ragas** framework to ensure pro
 
 > [!IMPORTANT]
 > This project is standardized to use **snake_case** for all file and directory paths, ensuring seamless deployment on Linux, Windows, and Docker environments. -->
- -->
 
 # 🚀 Agentic RAG: High-Performance Hybrid Search & Semantic Cache System
 
