@@ -27,3 +27,5 @@ src/logs/*.log
 .idea/
 .DS_Store
 Thumbs.db
+
+src/EvaluationRagas/test_data.txt
