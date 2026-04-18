@@ -5,20 +5,17 @@ import io
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from dotenv import load_dotenv
+import httpx
 
 
-import sys
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.dirname(current_dir))
+from helpers.config import get_settings
 from models import ResponseSignal
-env_path = os.path.join(os.path.dirname(current_dir), ".env")
-load_dotenv(dotenv_path=env_path)
-
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
-DEFAULT_PROJECT_ID = "telegram_uploads"
-
 from logs.logger import logger
+
+settings = get_settings()
+TOKEN = settings.TELEGRAM_BOT_TOKEN
+API_BASE_URL = settings.API_BASE_URL
+DEFAULT_PROJECT_ID = settings.TG_DEFAULT_PROJECT_ID
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(ResponseSignal.TG_BOT_ACTIVE_MSG.value)
@@ -32,7 +29,7 @@ async def process_query(update: Update, context: ContextTypes.DEFAULT_TYPE, quer
             response = await client.post(
                 f"{API_BASE_URL}/api/v25/data/Ask_Q",
                 json={"query": query},
-                timeout=120.0
+                timeout=settings.TG_REQUEST_TIMEOUT
             )
             
             if response.status_code == 200:
@@ -62,7 +59,6 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        # 1. Download voice file from Telegram natively (.ogg file)
         logger.info(f"Downloading voice message {voice.file_id}...")
         new_file = await context.bot.get_file(voice.file_id)
         
@@ -74,7 +70,6 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(ResponseSignal.TG_FAILED_DOWNLOAD_VOICE.value)
             return
 
-        # 2. Transcribe using Groq Whisper (native support for .ogg)
         groq_api_key = os.getenv("GROQ_API_KEY")
         if not groq_api_key:
             await update.message.reply_text(ResponseSignal.TG_STT_KEY_MISSING.value)
@@ -84,12 +79,11 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         async with httpx.AsyncClient() as client:
             files = {'file': ('voice.ogg', audio_bytes, 'audio/ogg')}
-            # Force the Whisper model to output English transcription
             data = {
-                'model': 'whisper-large-v3',
-                'language': 'en'
+                'model': settings.TG_WHISPER_MODEL,
+                'language': settings.TG_WHISPER_LANGUAGE
             }
-            headers = {'Authorization': f'Bearer {groq_api_key}'}
+            headers = {'Authorization': f'Bearer {settings.GROQ_API_KEY}'}
             
             logger.info("Sending audio to Groq Whisper API...")
             transcription_response = await client.post(
@@ -97,7 +91,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 files=files,
                 data=data,
                 headers=headers,
-                timeout=60.0
+                timeout=settings.TG_REQUEST_TIMEOUT
             )
             
             if transcription_response.status_code != 200:
@@ -114,7 +108,6 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             await update.message.reply_text(f"🗣️ Heard: {query}")
             
-            # 3. Process transcribed query through standard RAG pipeline
             await process_query(update, context, query)
             
     except Exception as e:
@@ -159,7 +152,7 @@ async def handle_file_upload(update: Update, context: ContextTypes.DEFAULT_TYPE)
             upload_response = await client.post(
                 f"{API_BASE_URL}/api/v25/data/upload/{DEFAULT_PROJECT_ID}",
                 files=files,
-                timeout=120.0
+                timeout=settings.TG_REQUEST_TIMEOUT
             )
             
             if upload_response.status_code != 200:
@@ -170,7 +163,6 @@ async def handle_file_upload(update: Update, context: ContextTypes.DEFAULT_TYPE)
             upload_data = upload_response.json()
             internal_file_id = upload_data.get("file_id")
             
-            # 3. Process the file
             await update.message.reply_text(ResponseSignal.TG_INDEXING_DB.value)
             logger.info(f"Processing file {internal_file_id}...")
             process_response = await client.post(
@@ -178,10 +170,10 @@ async def handle_file_upload(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 json={
                     "file_ids": [internal_file_id],
                     "project_id": DEFAULT_PROJECT_ID,
-                    "chunk_size": 500,
-                    "chunk_overlap": 50
+                    "chunk_size": settings.TG_CHUNK_SIZE,
+                    "chunk_overlap": settings.TG_CHUNK_OVERLAP
                 },
-                timeout=120.0
+                timeout=settings.TG_REQUEST_TIMEOUT
             )
 
             if process_response.status_code == 200:
@@ -219,7 +211,7 @@ def run_bot():
     print(f"--- Telegram Bot Starting (API: {API_BASE_URL}) ---")
     
     try:
-        import httpx
+        
         with httpx.Client() as client:
             response = client.get(f"{API_BASE_URL}/api/v1/")
             if response.status_code == 200:

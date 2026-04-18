@@ -59,6 +59,13 @@ class Settings(BaseSettings):
     EVAL_MAX_RETRIES: int = 20
     EVAL_MAX_WAIT: int = 5
 
+    TG_DEFAULT_PROJECT_ID: str = "telegram_uploads"
+    TG_REQUEST_TIMEOUT: float = 120.0
+    TG_WHISPER_MODEL: str = "whisper-large-v3"
+    TG_WHISPER_LANGUAGE: str = "en"
+    TG_CHUNK_SIZE: int = 500
+    TG_CHUNK_OVERLAP: int = 50
+
     GROQ_API_KEY:str
 
     DENSE_SEARCH_WEIGHT: float
