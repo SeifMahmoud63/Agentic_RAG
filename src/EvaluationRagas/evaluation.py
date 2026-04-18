@@ -24,17 +24,16 @@ import asyncio
 def run_rag_evaluation():
 
     # Load questions from external file
+    test_questions = []
     test_data_path = os.path.join(os.path.dirname(__file__), "test_data.txt")
     if os.path.exists(test_data_path):
         with open(test_data_path, "r", encoding="utf-8") as f:
             test_questions = [line.strip() for line in f if line.strip()]
-    else:
-        logger.warning(f"test_data.txt not found at {test_data_path}. Using internal fallback.")
-        test_questions = [
-            "What is the major of seif mahmoud ?",
-            "what is email yassein ahmed ? .",
-            "what is major youssab kamal  ?"
-        ]
+    
+    if not test_questions:
+        logger.error(f"test_data.txt not found or empty at {test_data_path}. Please add questions to run evaluation.")
+        import pandas as pd
+        return pd.DataFrame()
     
     # We take the first 3 for efficiency in this run
     test_questions = test_questions[:3]

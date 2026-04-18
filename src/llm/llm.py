@@ -4,6 +4,7 @@ from helpers.config import get_settings
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 from functools import lru_cache
+from langchain_cohere import ChatCohere
 
 class ThrottledChatCohere(ChatCohere):
     """
@@ -28,9 +29,9 @@ def get_llm():
     Returns the main reasoning LLM (now using Groq as requested).
     """
     settings = get_settings()
-    return ChatGroq(
+    return ChatCohere(
         model=settings.MODEL_NAME,
-        groq_api_key=settings.GROQ_API_KEY,
+        api_key=settings.COHERE_API_KEY,
         max_tokens=2048,
         temperature=0
     )
