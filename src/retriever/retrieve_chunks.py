@@ -8,7 +8,7 @@ from langchain_core.prompts import PromptTemplate
 from prompts import REWRITE_PROMPT, HYDE_PROMPT
 from llm.llm import get_llm, get_fast_llm
 from helpers import config
-from VectorDatabase import QdrantDb
+from vectordatabase import qdrant_db as QdrantDb
 
 
 import asyncio

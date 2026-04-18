@@ -10,10 +10,10 @@ from typing import List, Optional, Dict, Any
 
 from langchain_core.documents import Document
 
-from helpers.HashUtils import generate_file_hash, generate_doc_hash
+from helpers.hash_utils import generate_file_hash, generate_doc_hash
 from helpers.config import get_settings
-from controllers.ProcessController import ProcessController
-from VectorDatabase import QdrantDb, MetadataStore
+from controllers.process_controller import ProcessController
+from vectordatabase import qdrant_db as QdrantDb, metadata_store as MetadataStore
 
 
 

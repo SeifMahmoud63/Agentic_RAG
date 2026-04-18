@@ -13,7 +13,7 @@ def create_agent_graph():
     llm = get_llm()
     llm_with_tools = llm.bind_tools(tools)
     
-    system_prompt_path = os.path.join(os.path.dirname(__file__), "SystemPrompt.txt")
+    system_prompt_path = os.path.join(os.path.dirname(__file__), "system_prompt.txt")
     with open(system_prompt_path, "r", encoding="utf-8") as f:
         system_prompt = f.read()
 

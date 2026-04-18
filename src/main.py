@@ -10,10 +10,10 @@ async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
     logger.info("=== Server Starting ===")
 
-    from VectorDatabase.MetadataStore import init_db
+    from vectordatabase.metadata_store import init_db
     init_db()
 
-    from VectorDatabase.QdrantDb import warm_up
+    from vectordatabase.qdrant_db import warm_up
     warm_up()
 
     logger.info("=== Server Ready ===")

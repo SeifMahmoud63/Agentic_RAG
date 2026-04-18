@@ -1,6 +1,6 @@
 from helpers.config import get_settings
-from EmbeddingModel import EmbModel
-from .SemanticCache import ManualSemanticCache
+from embeddingmodel import emb_model as EmbModel
+from .semantic_cache import ManualSemanticCache
 
 settings = get_settings()
 

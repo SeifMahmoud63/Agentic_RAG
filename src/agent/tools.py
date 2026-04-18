@@ -1,6 +1,6 @@
 from langchain_core.tools import tool
 from langchain_community.retrievers.tavily_search_api import TavilySearchAPIRetriever
-from retriever.RetrieveChunks import advanced_retrieve 
+from retriever.retrieve_chunks import advanced_retrieve 
 from helpers import config
 from models import ResponseSignal
 

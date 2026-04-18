@@ -1,10 +1,10 @@
-from .BaseController import BaseController
+from .base_controller import BaseController
 from fastapi import UploadFile
 from models import ResponseSignal
 import re
 from helpers import config
 import os
-from .ProjectController import ProjectController
+from .project_controller import ProjectController
 
 
 class DataController(BaseController):

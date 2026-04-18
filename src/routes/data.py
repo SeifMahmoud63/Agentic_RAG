@@ -2,22 +2,22 @@ from fastapi import FastAPI, APIRouter, Depends, UploadFile, status
 from fastapi.responses import JSONResponse
 import os
 from helpers.config import get_settings, Settings
-from controllers.DataController import DataController
-from controllers.ProjectController import ProjectController
-from controllers.BaseController import BaseController
+from controllers.data_controller import DataController
+from controllers.project_controller import ProjectController
+from controllers.base_controller import BaseController
 from fastapi import HTTPException, status
 import aiofiles
 from models import ResponseSignal
 from logs.logger import logger
 from .schema.data import ProcessRequest
-from retriever import RetrieveChunks
+from retriever import retrieve_chunks as RetrieveChunks
 from prompts import QaPrompt
-from QuerySchema import QuestionRequest
+from queryschema import QuestionRequest
 from dotenv import load_dotenv
-from EvaluationRagas.evaluation import run_rag_evaluation
+from evaluationragas.evaluation import run_rag_evaluation
 from llm.llm import get_llm
-from helpers import CleanResponse, redis
-from VectorDatabase import IngestionService, QdrantDb
+from helpers import clean_response, redis
+from vectordatabase import ingestion_service as IngestionService, qdrant_db as QdrantDb
 import time
 from langchain_core.outputs import Generation
 from langchain_core.messages import HumanMessage, AIMessage
@@ -201,7 +201,7 @@ async def ask_question(query: QuestionRequest):
         if cached_answer:
             return {
                 "query": query.query,
-                "answer": CleanResponse.clean_llm_response(cached_answer),
+                "answer": clean_response.clean_llm_response(cached_answer),
                 "cache_status": ResponseSignal.CACHE_HIT.value
             }
 
@@ -213,7 +213,7 @@ async def ask_question(query: QuestionRequest):
 
         agent_messages = [msg for msg in final_state["messages"] if isinstance(msg, AIMessage)]
         agent_response = agent_messages[-1].content if agent_messages else ResponseSignal.COULDNT_GENERATE_ANSWER.value
-        cleaned_answer = CleanResponse.clean_llm_response(agent_response)
+        cleaned_answer = clean_response.clean_llm_response(agent_response)
 
         try:
             cache.update(clean_query, cleaned_answer)

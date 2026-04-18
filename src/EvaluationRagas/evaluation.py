@@ -3,8 +3,8 @@ from ragas.metrics import Faithfulness, ResponseRelevancy
 from ragas.llms import LangchainLLMWrapper
 from ragas.embeddings import LangchainEmbeddingsWrapper
 from langchain_groq import ChatGroq
-from retriever import RetrieveChunks
-from EmbeddingModel import EmbModel
+from retriever import retrieve_chunks as RetrieveChunks
+from embeddingmodel import emb_model as EmbModel
 from helpers import config
 from dotenv import load_dotenv
 from llm.llm import get_llm

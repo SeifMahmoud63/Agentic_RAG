@@ -18,8 +18,8 @@ from fastembed import SparseTextEmbedding
 from langchain_core.documents import Document
 
 from helpers.config import get_settings
-from helpers.HashUtils import generate_doc_hash
-from EmbeddingModel import EmbModel
+from helpers.hash_utils import generate_doc_hash
+from embeddingmodel import emb_model as EmbModel
 from models import ResponseSignal
 
 

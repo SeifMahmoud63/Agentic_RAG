@@ -1,1 +1,1 @@
-from .RetrieveChunks import advanced_retrieve
+from .retrieve_chunks import advanced_retrieve

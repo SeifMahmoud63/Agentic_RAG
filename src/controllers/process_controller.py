@@ -1,6 +1,6 @@
-from .BaseController import BaseController
+from .base_controller import BaseController
 import os
-from .ProjectController import ProjectController
+from .project_controller import ProjectController
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.document_loaders import TextLoader
 from models import ProcessingEnum
