@@ -19,38 +19,51 @@ class ManualSemanticCache:
     def lookup(self, query: str):
         start_time = time.time()
         
+        # 1. Embed current query
         query_vector = np.array(self.embedding_model.embed_query(query))
+        norm_q = np.linalg.norm(query_vector)
+        
+        if norm_q == 0:
+            return None
+
+        # 2. Fetch all vector keys
+        vector_keys = self.r.keys(f"{self.VECTOR_PREFIX}*")
+        if not vector_keys:
+            print(f"--- [MANUAL CACHE MISS] Cache is empty (0.0000s) ---")
+            return None
+
+        # 3. Batch retrieve all vectors (extremely efficient O(1) round-trip)
+        vector_values = self.r.mget(vector_keys)
         
         best_match_id = None
         max_similarity = -1.0
         
-
-        for key in self.r.scan_iter(f"{self.VECTOR_PREFIX}*"):
-            vector_data = self.r.get(key)
-            if not vector_data:
+        # 4. Semantic Similarity Loop (Numpy optimized)
+        for i, val in enumerate(vector_values):
+            if not val:
                 continue
             
-            cached_vector = np.array(json.loads(vector_data))
-            
-
-            norm_q = np.linalg.norm(query_vector)
+            cached_vector = np.array(json.loads(val))
             norm_c = np.linalg.norm(cached_vector)
             
-            if norm_q > 0 and norm_c > 0:
+            if norm_c > 0:
                 similarity = np.dot(query_vector, cached_vector) / (norm_q * norm_c)
                 if similarity > max_similarity:
                     max_similarity = similarity
-                    best_match_id = key.decode().replace(self.VECTOR_PREFIX, "")
+                    best_match_id = vector_keys[i].decode().replace(self.VECTOR_PREFIX, "")
 
         duration = time.time() - start_time
         
+        # 5. Evaluate Threshold
         if best_match_id and max_similarity >= self.threshold:
             result_data = self.r.get(f"{self.RESULT_PREFIX}{best_match_id}")
             if result_data:
                 print(f"--- [MANUAL CACHE HIT] Similarity: {max_similarity:.4f} (Ready in {duration:.4f}s) ---")
                 return json.loads(result_data)
         
-        print(f"--- [MANUAL CACHE MISS] (Lookup took {duration:.4f}s) ---")
+        # Log the miss with the best score found to help user tune expectations
+        best_score_str = f"{max_similarity:.4f}" if max_similarity > -1 else "N/A"
+        print(f"--- [MANUAL CACHE MISS] Best similarity: {best_score_str} (Threshold: {self.threshold}) | Lookup: {duration:.4f}s ---")
         return None
 
     def update(self, query: str, response_text: str):

@@ -45,10 +45,10 @@ async def process_query(update: Update, context: ContextTypes.DEFAULT_TYPE, quer
                     await update.message.reply_text(f"**Answer:**\n\n{answer}")
             else:
                 logger.error(f"API Error ({response.status_code}): {response.text}")
-                await update.message.reply_text(f"API Error ({response.status_code}): {response.text[:100]}")
+                await update.message.reply_text("error")
         except Exception as e:
             logger.error(f"Exception in process_query: {str(e)}")
-            await update.message.reply_text(f"Error: {str(e)}")
+            await update.message.reply_text("error")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.message.text
@@ -102,7 +102,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             if transcription_response.status_code != 200:
                 logger.error(f"Transcription failed: {transcription_response.text}")
-                await update.message.reply_text(f"Transcription Failed: {transcription_response.text[:100]}")
+                await update.message.reply_text("error")
                 return
                 
             transcription_data = transcription_response.json()
@@ -119,7 +119,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
     except Exception as e:
         logger.error(f"Exception during voice processing: {str(e)}")
-        await update.message.reply_text(f"Voice Processing Error: {str(e)}")
+        await update.message.reply_text("error")
 
 async def handle_file_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     document = update.message.document
@@ -164,7 +164,7 @@ async def handle_file_upload(update: Update, context: ContextTypes.DEFAULT_TYPE)
             
             if upload_response.status_code != 200:
                 logger.error(f"Upload failed: {upload_response.text}")
-                await update.message.reply_text(f"API Upload Failed: {upload_response.text[:200]}")
+                await update.message.reply_text("error")
                 return
 
             upload_data = upload_response.json()
@@ -198,11 +198,11 @@ async def handle_file_upload(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     await update.message.reply_text(f"Indexing Failed! Reason: {error_detail}")
             else:
                 logger.error(f"Processing failed: {process_response.text}")
-                await update.message.reply_text(f"Uploaded, but indexing failed: {process_response.text[:200]}")
+                await update.message.reply_text("error")
 
     except Exception as e:
         logger.error(f"Exception during upload: {str(e)}")
-        await update.message.reply_text(f"System Error: {str(e)}")
+        await update.message.reply_text("error")
 
 def run_bot():
     if not TOKEN:
@@ -221,7 +221,7 @@ def run_bot():
     try:
         import httpx
         with httpx.Client() as client:
-            response = client.get(f"{API_BASE_URL}/")
+            response = client.get(f"{API_BASE_URL}/api/v1/")
             if response.status_code == 200:
                 print("API Backend is reachable.")
             else:

@@ -17,6 +17,8 @@ settings = config.get_settings()
 llm = get_llm()
 
 
+import asyncio
+
 def run_rag_evaluation():
 
     test_questions = [
@@ -35,9 +37,9 @@ def run_rag_evaluation():
     for question in test_questions:
 
 
-        retrieved_docs = RetrieveChunks.advanced_retrieve(
+        retrieved_docs = asyncio.run(RetrieveChunks.advanced_retrieve(
             query=question
-        )[:3]   
+        ))[:3]   
 
         MAX_CONTEXT_CHARS = 300
 

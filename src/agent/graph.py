@@ -17,7 +17,7 @@ def create_agent_graph():
     with open(system_prompt_path, "r", encoding="utf-8") as f:
         system_prompt = f.read()
 
-    def call_model(state: MessagesState):
+    async def call_model(state: MessagesState):
         messages = state["messages"]
         
         if not any(isinstance(m, SystemMessage) for m in messages):
@@ -25,7 +25,7 @@ def create_agent_graph():
         else:
             current_messages = messages
 
-        response = llm_with_tools.invoke(current_messages)
+        response = await llm_with_tools.ainvoke(current_messages)
         
 
         if hasattr(response, "tool_calls") and response.tool_calls:

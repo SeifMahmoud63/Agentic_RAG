@@ -7,10 +7,10 @@ from models import ResponseSignal
 tavily_retriever = TavilySearchAPIRetriever(k=config.get_settings().TOP_K_TAVILY)
 
 @tool
-def Search_Local_Documents(query: str) -> str:
+async def Search_Local_Documents(query: str) -> str:
     """Use this tool to search for specific facts, personal details, contact information, project data, or technical knowledge contained in the user's uploaded documents (PDFs, PPTXs, TXTs)."""
     print(f"--- [TOOL CALL] Search_Local_Documents called with query: '{query}' ---")
-    results = advanced_retrieve(query=query)
+    results = await advanced_retrieve(query=query)
     print(f"--- [TOOL CALL] Search_Local_Documents found {len(results)} results ---")
     if not results:
         return ResponseSignal.NO_LOCAL_INFO.value

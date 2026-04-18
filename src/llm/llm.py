@@ -1,6 +1,8 @@
 import time
 from langchain_cohere import ChatCohere
 from helpers.config import get_settings
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 from functools import lru_cache
 
 class ThrottledChatCohere(ChatCohere):
@@ -10,7 +12,6 @@ class ThrottledChatCohere(ChatCohere):
     """
     def _generate(self, *args, **kwargs):
         # Mandatory 7-second delay between every single call
-        # This guarantees max 8 calls per minute (60/7 = 8.5), extremely safe for Trial limits.
         time.sleep(7.0) 
         return super()._generate(*args, **kwargs)
 
@@ -23,10 +24,26 @@ class ThrottledChatCohere(ChatCohere):
 
 @lru_cache(maxsize=1)
 def get_llm():
+    """
+    Returns the main reasoning LLM (now using Groq as requested).
+    """
     settings = get_settings()
-    return ThrottledChatCohere(
+    return ChatGroq(
         model=settings.MODEL_NAME,
-        cohere_api_key=settings.COHERE_API_KEY,
+        groq_api_key=settings.GROQ_API_KEY,
         max_tokens=2048,
+        temperature=0
+    )
+
+
+@lru_cache(maxsize=1)
+def get_fast_llm():
+    """
+    Returns a fast model (Google Gemini) for utility tasks like Query Rewriting and HyDE.
+    """
+    settings = get_settings()
+    return ChatGoogleGenerativeAI(
+        model=settings.GEMINI_MODEL_NAME,
+        google_api_key=settings.GOOGLE_API_KEY,
         temperature=0
     )

@@ -1,1 +1,4 @@
-Write a detailed answer to the following question to act as a hypothetical document :{query}
+SYSTEM: You are a document generator for a RAG system.
+TASK: Write a 3-sentence maximum hypothetical answer for the query.
+STRICT RULE: Use ONLY high-density keywords. No fluff, no "Based on...", no intros.
+QUERY: {query}

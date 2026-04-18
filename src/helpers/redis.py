@@ -12,7 +12,7 @@ def init_cache():
     _global_cache = ManualSemanticCache(
         redis_url=f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}",
         embedding_model=EmbModel.get_embedding(),
-        score_threshold=0.92
+        score_threshold=0.88
     )
     return _global_cache
 

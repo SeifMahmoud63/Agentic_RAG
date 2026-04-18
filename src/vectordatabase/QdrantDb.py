@@ -110,6 +110,7 @@ def upsert_chunks(
     file_id: str,
     file_hash: str,
     version: int,
+    project_id: str,
 ) -> int:
     """
     Embed and upsert document chunks into Qdrant.
@@ -170,6 +171,7 @@ def upsert_chunks(
             payload = {
                 "text": chunk.page_content,
                 "file_id": file_id,
+                "project_id": project_id,
                 "chunk_id": chunk_id,
                 "chunk_hash": chunk_text_hash,
                 "file_hash": file_hash,
@@ -201,11 +203,70 @@ def upsert_chunks(
     return len(points)
 
 
+def find_file_by_content_overlap(
+    chunk_hashes: List[str], 
+    project_id: str
+) -> tuple[Optional[str], float]:
+    """
+    Search globally across the project to find the file that has the highest 
+    overlap with the provided chunk hashes.
+    
+    Returns: (best_file_id, overlap_percentage)
+    """
+    if not chunk_hashes:
+        return None, 0.0
+
+    _ensure_collection()
+    client = get_qdrant_client()
+    settings = get_settings()
+    collection_name = settings.QDRANT_COLLECTION
+
+    # Query Qdrant for any points matching these hashes in the same project
+    # We use scroll because we only need the presence of hashes, not scores.
+    # Note: We limit to a reasonable number of points to prevent memory issues.
+    matches, _ = client.scroll(
+        collection_name=collection_name,
+        scroll_filter=models.Filter(
+            must=[
+                models.FieldCondition(key="project_id", match=models.MatchValue(value=project_id)),
+                models.FieldCondition(key="chunk_hash", match=models.MatchAny(any=chunk_hashes))
+            ]
+        ),
+        with_payload=["file_id"],
+        limit=1000
+    )
+
+    if not matches:
+        return None, 0.0
+
+    # Count hits per file_id
+    file_counts = defaultdict(int)
+    for p in matches:
+        f_id = p.payload.get("file_id")
+        if f_id:
+            file_counts[f_id] += 1
+
+    if not file_counts:
+        return None, 0.0
+
+    # Find the best match
+    best_file_id = max(file_counts, key=file_counts.get)
+    best_count = file_counts[best_file_id]
+    
+    # Overlap = (count of matched unique hashes) / (total unique hashes in new file)
+    # Note: Qdrant scroll might return multiple points for the same hash if indexed multiple times,
+    # but here we just want a heuristic of "how much of this new file do I already have?"
+    overlap_pct = best_count / len(chunk_hashes)
+
+    return best_file_id, overlap_pct
+
+
 def sync_file_chunks(
     file_id: str,
     new_chunks: List[Document],
     file_hash: str,
     version: int,
+    project_id: str,
 ) -> dict:
     """
     Incremental sync:
@@ -261,7 +322,13 @@ def sync_file_chunks(
     
     num_indexed = 0
     if chunks_to_upsert:
-        num_indexed = upsert_chunks(chunks_to_upsert, file_id, file_hash, version)
+        num_indexed = upsert_chunks(
+            chunks=chunks_to_upsert, 
+            file_id=file_id, 
+            file_hash=file_hash, 
+            version=version,
+            project_id=project_id
+        )
         
     if ids_to_delete:
         client.delete(

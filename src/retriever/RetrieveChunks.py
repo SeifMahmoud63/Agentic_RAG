@@ -6,16 +6,16 @@ from langchain_core.documents import Document
 from flashrank import Ranker, RerankRequest # Added FlashRank for better precision
 from langchain_core.prompts import PromptTemplate
 from prompts import REWRITE_PROMPT, HYDE_PROMPT
-from llm.llm import get_llm
+from llm.llm import get_llm, get_fast_llm
 from helpers import config
 from VectorDatabase import QdrantDb
 
-settings = config.get_settings()
 
-
+import asyncio
+settings=config.get_settings()
 ranker = Ranker(model_name=settings.FLASH_MODEL_RERANKER, cache_dir=settings.fLASH_CACHE_DIR)
 
-def advanced_retrieve(query: str, top_k: Optional[int] = None) -> List[Document]:
+async def advanced_retrieve(query: str, top_k: Optional[int] = None) -> List[Document]:
     """
     Retrieve documents using Qdrant hybrid search, then rerank them using FlashRank.
     This process ensures higher semantic relevance for the final context.
@@ -25,21 +25,26 @@ def advanced_retrieve(query: str, top_k: Optional[int] = None) -> List[Document]
     if top_k is None:
         top_k = settings.TOP_K_HYBRID
 
-    # 1. Query Rewrite
-    start_rewrite = time.time()
-    logger.info(f"Rewriting query: '{query[:50]}...'")
+    # 1. & 2. Run Query Rewrite and HyDE Doc generation in parallel using the "Fast" LLM (Gemini)
+    logger.info(f"Triggering Parallel Rewrite and HyDE for: '{query[:50]}...'")
     rewrite_template = PromptTemplate.from_template(REWRITE_PROMPT)
-    rewritten_query = llm.invoke(rewrite_template.format(query=query)).content
-    end_rewrite = time.time()
-    logger.info(f"--- [QUERY REWRITE] took {end_rewrite - start_rewrite:.4f}s ---")
-    
-    # 2. HyDE (Hypothetical Document Embedding)
-    start_hyde = time.time()
-    logger.info(f"Generating HyDE doc for: '{rewritten_query[:50]}...'")
     hyde_template = PromptTemplate.from_template(HYDE_PROMPT)
-    hyde_doc = llm.invoke(hyde_template.format(query=rewritten_query)).content
-    end_hyde = time.time()
-    logger.info(f"--- [HYDE GENERATION] took {end_hyde - start_hyde:.4f}s ---")
+    fast_llm = get_fast_llm()
+    
+    start_parallel = time.time()
+    # We trigger both simultaneously using Gemini to avoid Cohere Trial rate limits.
+    res_rewrite, res_hyde = await asyncio.gather(
+        fast_llm.ainvoke(rewrite_template.format(query=query)),
+        fast_llm.ainvoke(hyde_template.format(query=query))
+    )
+    
+    rewritten_query = res_rewrite.content
+    hyde_doc = res_hyde.content
+    end_parallel = time.time()
+    
+    logger.info(f"--- [PARALLEL LLM CALLS] took {end_parallel - start_parallel:.4f}s ---")
+    logger.info(f"Rewritten Query: {rewritten_query[:50]}...")
+    logger.info(f"HyDE Doc length: {len(hyde_doc)} chars")
 
     # 3. Hybrid Search with specialized queries
     start_search = time.time()

@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     TAVILY_API_KEY:str
     SPLADEE_MODEL_NAME :str
     GOOGLE_API_KEY:str
+    GEMINI_MODEL_NAME: str = "gemini-1.5-flash"
 
     QDRANT_HOST: str = "localhost"
     QDRANT_PORT: int = 6333
@@ -41,6 +42,7 @@ class Settings(BaseSettings):
     SPARSE_SEARCH_WEIGHT: float 
 
     MAX_RETRIES: int = 5
+    DUPLICATE_THRESHOLD: float = 0.35
 
     
     model_config=SettingsConfigDict(

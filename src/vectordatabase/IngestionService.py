@@ -10,7 +10,7 @@ from typing import List, Optional, Dict, Any
 
 from langchain_core.documents import Document
 
-from helpers.HashUtils import generate_file_hash
+from helpers.HashUtils import generate_file_hash, generate_doc_hash
 from helpers.config import get_settings
 from controllers.ProcessController import ProcessController
 from VectorDatabase import QdrantDb, MetadataStore
@@ -74,22 +74,8 @@ def ingest_file(
             logger.info(f"Same content exists in project '{existing_project}', but allowing for project '{project_id}'.")
 
     clean_name = _extract_original_name(file_id)
-    existing_file = MetadataStore.get_file_by_name(clean_name, project_id)
-
-    version = 1
-    is_update = False
-    use_file_id = file_id # Default to new ID
-
-    if existing_file:
-        is_update = True
-        use_file_id = existing_file["file_id"] 
-        old_version = existing_file["current_version"]
-        version = old_version + 1
-
-        logger.info(f"UPDATE detected for '{clean_name}'. Syncing into existing anchor ID: {use_file_id}")
-    else:
-        logger.info(f"Indexing new document: {clean_name} (ID: {file_id})")
-
+    
+    # --- STEP 1: Process Content First (to get chunk hashes for identification) ---
     try:
         content = controller.get_content(file_id=file_id)
         chunks = controller.process(
@@ -103,26 +89,74 @@ def ingest_file(
         logger.error(f"Error chunking file '{file_id}': {e}")
         return {
             "status": "error",
-            "file_id": use_file_id,
+            "file_id": file_id,
             "detail": f"Chunking error: {str(e)}",
         }
 
     if not chunks:
         return {
             "status": "error",
-            "file_id": use_file_id,
+            "file_id": file_id,
             "detail": "No chunks generated (file might be empty).",
         }
 
+    # --- STEP 2: Identity Resolution (Who am I?) ---
+    version = 1
+    is_update = False
+    use_file_id = file_id # Default to new ID
+    match_source = "new"
+
+    # A. First, check if the FILENAME already exists in this project
+    existing_file = MetadataStore.get_file_by_name(clean_name, project_id)
+    
+    if existing_file:
+        is_update = True
+        use_file_id = existing_file["file_id"] 
+        old_version = existing_file["current_version"]
+        version = old_version + 1
+        match_source = "filename"
+        logger.info(f"UPDATE detected for '{clean_name}' (Filename Match). Anchor ID: {use_file_id}")
+    else:
+        # B. If no name match, perform GLOBAL CONTENT OVERLAP CHECK
+        logger.info(f"Scanning project '{project_id}' for content overlap for '{clean_name}'...")
+        new_chunk_hashes = [generate_doc_hash(c.page_content) for c in chunks]
+        
+        sim_file_id, overlap_pct = QdrantDb.find_file_by_content_overlap(
+            chunk_hashes=new_chunk_hashes,
+            project_id=project_id
+        )
+
+        if sim_file_id and overlap_pct >= settings.DUPLICATE_THRESHOLD:
+            # We found a sibling! Adopt its identity.
+            is_update = True
+            use_file_id = sim_file_id
+            
+            # Get the version from the actual matched file
+            sim_file_meta = MetadataStore.get_file_by_id(sim_file_id)
+            old_name = sim_file_meta.get("original_name") if sim_file_meta else "Unknown"
+            old_version = sim_file_meta.get("current_version", 1) if sim_file_meta else 1
+            version = old_version + 1
+            match_source = "content"
+            
+            logger.info(f"--- [IDENTITY MATCH] Detected {overlap_pct*100:.1f}% duplication with '{old_name}' (ID: {sim_file_id}). ---")
+            logger.info(f"--- Treating '{clean_name}' as an update to '{old_name}'. ---")
+        else:
+            logger.info(f"No significant overlap found ({overlap_pct*100:.1f}% matched). Treating as NEW document.")
+
+    # --- STEP 3: Execute Sync ---
     sync_summary = QdrantDb.sync_file_chunks(
         new_chunks=chunks,
         file_id=use_file_id,
         file_hash=file_hash,
         version=version,
+        project_id=project_id,
     )
 
+    # --- STEP 4: Update Metadata Registry ---
     if is_update:
         MetadataStore.register_new_version(use_file_id, file_hash)
+        # Optional: If the name changed, update it in metadata to the new name? 
+        # For now we keep the original anchor name, or we could update it.
     else:
         MetadataStore.register_new_file(
             file_id=use_file_id,
@@ -132,11 +166,12 @@ def ingest_file(
         )
 
     action = "updated" if is_update else "ingested"
-    logger.info(f"Successfully {action} '{clean_name}': {sync_summary['indexed']} new, {sync_summary['kept']} kept (v{version}).")
+    logger.info(f"Successfully {action} '{clean_name}' via {match_source} logic: {sync_summary['indexed']} new, {sync_summary['kept']} kept (v{version}).")
 
     return {
         "status": "success",
         "action": action,
+        "match_source": match_source,
         "file_id": use_file_id,
         "original_name": clean_name,
         "version": version,

@@ -22,8 +22,7 @@ import time
 from langchain_core.outputs import Generation
 from langchain_core.messages import HumanMessage, AIMessage
 from agent.graph import graph
-from fastapi.responses import StreamingResponse
-import json
+from agent.graph import graph
 import redis as redis_lib
 
 
@@ -187,11 +186,9 @@ settings = get_settings()
 llm = get_llm()
 
 @data_router.post("/Ask_Q")
-def ask_question(query: QuestionRequest):
+async def ask_question(query: QuestionRequest):
     try:
         overall_start = time.time()
-        
-        # 1. Check Semantic Cache first
         cache = redis.get_cache()
         clean_query = query.query.strip()
         
@@ -202,44 +199,25 @@ def ask_question(query: QuestionRequest):
             cached_answer = None
 
         if cached_answer:
-            print(f"--- [QUERY CACHE HIT] Total time: {time.time() - overall_start:.2f}s")
             return {
                 "query": query.query,
                 "answer": CleanResponse.clean_llm_response(cached_answer),
                 "cache_status": ResponseSignal.CACHE_HIT.value
             }
 
-
-        import uuid
         session_id = getattr(query, "project_id", "global_memory_session")
         config_run = {"configurable": {"thread_id": session_id}}
-        
         input_state = {"messages": [HumanMessage(content=clean_query)]}
         
-        try:
-            final_state = graph.invoke(input_state, config=config_run)
-        except Exception as e:
-            # If the stable memory causes a 400 error (history corruption), we rescue by resetting once.
-            if "400" in str(e) or "invalid request" in str(e).lower():
-                logger.warning(f"Detected memory corruption in session '{session_id}'. Resetting...")
-                reset_config = {"configurable": {"thread_id": f"reset_{str(uuid.uuid4())[:8]}"}}
-                final_state = graph.invoke(input_state, config=reset_config)
-            else:
-                raise e
+        final_state = await graph.ainvoke(input_state, config=config_run)
 
         agent_messages = [msg for msg in final_state["messages"] if isinstance(msg, AIMessage)]
-        if agent_messages:
-            text_responses = [msg.content for msg in agent_messages if msg.content.strip()]
-            agent_response = text_responses[-1] if text_responses else ResponseSignal.COULDNT_GENERATE_ANSWER.value
-        else:
-            agent_response = ResponseSignal.COULDNT_REACH_CONCLUSION.value
-
+        agent_response = agent_messages[-1].content if agent_messages else ResponseSignal.COULDNT_GENERATE_ANSWER.value
         cleaned_answer = CleanResponse.clean_llm_response(agent_response)
 
         try:
             cache.update(clean_query, cleaned_answer)
-        except Exception as e:
-            logger.warning(f"Manual cache update failed: {e}")
+        except: pass
 
         print(f"=== TOTAL END-TO-END TIME: {time.time() - overall_start:.2f}s ===")
         return {
@@ -247,12 +225,9 @@ def ask_question(query: QuestionRequest):
             "answer": cleaned_answer,
             "cache_status": ResponseSignal.CACHE_MISS.value
         }
-    
     except Exception as e:
-        print(f"Error in Ask_Q endpoint: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=ResponseSignal.ERROR_WHILE_PROCESSING_QUESTION.value)
+        logger.error(f"Error in Ask_Q: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @data_router.post("/reset-cache")

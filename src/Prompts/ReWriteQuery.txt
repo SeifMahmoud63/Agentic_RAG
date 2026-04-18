@@ -1,1 +1,5 @@
-Rewrite the following question to be more specific and optimized for document retrieval : {query}
+"Act as a Search Expert. Your goal is to rewrite the user's query to be more descriptive and optimized for a vector database search. Expand the query by adding potential synonyms and contextually relevant technical terms.
+
+User Query: {query}
+
+Optimized Search Query:"
