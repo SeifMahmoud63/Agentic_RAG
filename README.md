@@ -187,47 +187,52 @@ docker-compose up --build -d
 
 ```
 src/
-├── agent/                      # Autonomous State Machine (LangGraph)
-│   ├── graph.py                # Workflow logic & node definitions
-│   ├── tools.py                # Retrieval tools for the agent
-│   └── system_prompt.txt       # Core instructions for the LLM
-├── assets/                     # Local storage for uploaded documents
-├── bot/                        # Client Interfaces
-│   └── telegram_bot.py         # Telegram bot handler & integration
-├── controllers/                # Request & Workflow Logic
-│   ├── base_controller.py      # Shared path/file utilities
-│   ├── data_controller.py      # Upload validation & naming
-│   ├── project_controller.py   # Multi-project path management
-│   └── process_controller.py   # Ingestion/Chunking orchestration
-├── embeddingmodel/             # AI Vector Logic
-│   └── emb_model.py            # Dense embedding model (Gemini/HF)
-├── evaluationragas/            # Testing & Metrics
-│   ├── evaluation.py           # Ragas scoring orchestration
-│   └── test_data.txt           # Golden test set for quality checks
-├── helpers/                    # Core Utilities
-│   ├── config.py               # Pydantic Settings & .env loading
-│   ├── hash_utils.py           # SHA-256 logic for deduplication
-│   ├── redis.py                # Semantic cache implementation
-│   └── clean_response.py       # LLM output post-processing
-├── llm/                        # Language Model Config
-│   └── llm.py                  # Provider setup (Groq/Google)
-├── logs/                       # System Observability
-│   └── logger.py               # Standardized application logging
-├── models/                     # Shared Data Models
-│   └── signals.py              # Standardized response enums
-├── queryschema/                # API Validation Models
-├── retriever/                  # Search Engine Logic
-│   └── retrieve_chunks.py      # Hybrid + Reranker implementation
-├── routes/                     # API Endpoints (FastAPI)
-│   ├── base.py                 # Health checks & system routes
-│   └── data.py                 # Ingestion, Ask_Q & Eval routes
-├── vectordatabase/             # Persistence Layer
-│   ├── ingestion_service.py    # Master sync/upsert flow
-│   ├── qdrant_db.py            # Vector storage & Hybrid search
-│   └── metadata_store.py       # SQLite registry for file versions
-├── main.py                     # Application Entry Point
-├── .env                        # Environment Secrets (DO NOT COMMIT)
-└── requirements.txt            # Python Dependencies
+├── agent/                  # Autonomous State Machine (LangGraph)
+│   ├── graph.py            # Workflow logic & node definitions
+│   ├── tools.py            # Retrieval tools for the agent
+│   └── system_prompt.txt   # Core instructions for the LLM
+├── assets/                 # Local storage for uploaded documents
+├── bot/                    # Client Interfaces
+│   └── telegram_bot.py     # Telegram bot handler & integration
+├── controllers/            # Request & Workflow Logic
+│   ├── base_controller.py  # Shared path/file utilities
+│   ├── data_controller.py  # Upload validation & naming
+│   ├── project_controller.py # Multi-project path management
+│   └── process_controller.py # Ingestion/Chunking orchestration
+├── embeddingmodel/         # AI Vector Logic
+│   └── emb_model.py        # Dense embedding model (Gemini/HF)
+├── evaluationragas/        # Testing & Metrics
+│   ├── evaluation.py       # Ragas scoring orchestration
+│   └── test_data.txt       # Golden test set for quality checks
+├── helpers/                # Core Utilities
+│   ├── config.py           # Pydantic Settings & .env loading
+│   ├── hash_utils.py       # SHA-256 logic for deduplication
+│   ├── redis.py            # Semantic cache implementation
+│   └── clean_response.py   # LLM output post-processing
+├── llm/                    # Language Model Config
+│   └── llm.py              # Provider setup (Groq/Google)
+├── logs/                   # System Observability
+│   └── logger.py           # Standardized application logging
+├── models/                 # Data Layer & Constants
+│   └── enums/              # Standardized Enums
+│       ├── processing_enum.py # Chunking & processing status
+│       └── response_enum.py   # Global API signals & messages
+├── queryschema/            # API Validation Models
+├── retriever/              # Search Engine Logic
+│   └── retrieve_chunks.py  # Hybrid + Reranker implementation
+├── routes/                 # API Endpoints (FastAPI)
+│   ├── base.py             # Health checks & system routes
+│   ├── data.py             # Ingestion, Ask_Q, & Eval routes
+│   └── schema/             # Request/Response Pydantic schemas
+│       └── data.py         # Validation for upload & process requests
+├── vectordatabase/         # Persistence Layer
+│   ├── ingestion_service.py# The master sync/upsert flow
+│   ├── qdrant_db.py        # Vector storage & Hybrid search
+│   └── metadata_store.py   # SQLite registry for file versions
+├── main.py                 # Application Entry Point
+├── .env                    # Environment Secrets
+├── .env.example            # Template for required environment variables
+└── requirements.txt        # Python Dependencies
 ```
 
 ---
