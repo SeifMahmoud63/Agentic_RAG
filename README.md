@@ -4,6 +4,8 @@
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?style=flat-square&logo=fastapi&logoColor=white)
 ![LangGraph](https://img.shields.io/badge/LangGraph-Agentic-6B48FF?style=flat-square)
+![LangSmith](https://img.shields.io/badge/LangSmith-Tracing-11abb0?style=flat-square)
+![Ragas](https://img.shields.io/badge/Ragas-Evaluation-orange?style=flat-square)
 ![Qdrant](https://img.shields.io/badge/Qdrant-Vector_DB-DC244C?style=flat-square)
 ![Redis](https://img.shields.io/badge/Redis-Semantic_Cache-FF4438?style=flat-square&logo=redis&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)
@@ -20,6 +22,8 @@
 | **Sparse Embeddings** | SPLADE (via FastEmbed) | Local HuggingFace models for keyword-aware retrieval |
 | **Reranker** | FlashRank | Lightweight reranking using `TinyBERT-L-2-v2` |
 | **Orchestration** | LangGraph | Complex agentic workflows and message states |
+| **Observability** | LangSmith | Full-stack tracing for debugging agentic LLM flows |
+| **Evaluation** | Ragas | Metrics-driven evaluation (Faithfulness, Relevancy) |
 | **Telegram Integration** | Voice STT Support | Native Speech-to-Text for voice message processing |
 
 ---
@@ -80,6 +84,8 @@ The system is continuously monitored using the **Ragas** framework:
 # .env
 GOOGLE_API_KEY=your_key_here
 TELEGRAM_BOT_TOKEN=your_bot_token
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_API_KEY=your_langsmith_key
 ```
 
 ### 2. Build and run all services
