@@ -10,4 +10,3 @@ def get_prompt(file_name):
 HYDE_PROMPT = get_prompt("hyde")
 REWRITE_PROMPT = get_prompt("rewrite_query")
 QA_PROMPT = get_prompt("qa_prompt")
-QaPrompt = QA_PROMPT # Keeping backward compatibility for internal variable if needed, but standardizing to uppercase constant
