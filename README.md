@@ -94,7 +94,7 @@ The system is continuously evaluated using the **Ragas** framework to ensure pro
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)
 
 ---
-![Bot Demo](assets/demo.png)
+[![Telegram Bot](https://img.shields.io/badge/Telegram-@YourBotName-26A5E4?style=flat-square&logo=telegram&logoColor=white)](https://t.me/your_bot)
 
 
 ## 🏗️ Core Technology Stack
