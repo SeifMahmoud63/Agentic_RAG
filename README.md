@@ -82,10 +82,7 @@ The system is continuously monitored using the **Ragas** framework:
 
 ```bash
 # .env
-GOOGLE_API_KEY=your_key_here
-TELEGRAM_BOT_TOKEN=your_bot_token
-LANGCHAIN_TRACING_V2=true
-LANGCHAIN_API_KEY=your_langsmith_key
+cp .env.example .env
 ```
 
 ### 2. Build and run all services
