@@ -25,14 +25,11 @@ async def advanced_retrieve(query: str, top_k: Optional[int] = None) -> List[Doc
     if top_k is None:
         top_k = settings.TOP_K_HYBRID
 
-    # 1. & 2. Run Query Rewrite and HyDE Doc generation in parallel using the "Fast" LLM (Gemini)
     logger.info(f"Triggering Parallel Rewrite and HyDE for: '{query[:50]}...'")
     rewrite_template = PromptTemplate.from_template(REWRITE_PROMPT)
     hyde_template = PromptTemplate.from_template(HYDE_PROMPT)
-    fast_llm = get_fast_llm()
     
     start_parallel = time.time()
-    # We trigger both simultaneously using Gemini to avoid Cohere Trial rate limits.
     res_rewrite, res_hyde = await asyncio.gather(
         llm.ainvoke(rewrite_template.format(query=query)),
         llm.ainvoke(hyde_template.format(query=query))
@@ -46,7 +43,6 @@ async def advanced_retrieve(query: str, top_k: Optional[int] = None) -> List[Doc
     logger.info(f"Rewritten Query: {rewritten_query[:50]}...")
     logger.info(f"HyDE Doc length: {len(hyde_doc)} chars")
 
-    # 3. Hybrid Search with specialized queries
     start_search = time.time()
     results = QdrantDb.hybrid_search(query=rewritten_query, dense_query=hyde_doc, top_k=top_k)
     end_search = time.time()
