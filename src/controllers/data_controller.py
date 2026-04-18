@@ -14,7 +14,6 @@ class DataController(BaseController):
         self.size_sclae=1024*1024
 
     def validate_uploaded_file(self,file:UploadFile):
-        # make it /uploadFile to can make content_type and check 
 
 
         if file.content_type not in self.app_settings.FILE_ALLOWED_TYPES:
