@@ -1,4 +1,4 @@
-# 🚀 Agentic RAG: High-Performance Hybrid Search & Semantic Cache System
+# 🚀 Agentic RAG: High-Performance Hybrid Search, Semantic Cache & Telegram Bot Integration
 
 > A state-of-the-art Retrieval-Augmented Generation (RAG) system built with **FastAPI**, **LangGraph**, and **Qdrant**. Features an advanced agentic pipeline designed for low latency, high precision, and incremental data synchronization.
 
