@@ -8,7 +8,6 @@ _global_cache = None
 
 def init_cache():
     global _global_cache
-    # Using our manual, ultra-stable semantic cache
     _global_cache = ManualSemanticCache(
         redis_url=f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}",
         embedding_model=EmbModel.get_embedding(),
