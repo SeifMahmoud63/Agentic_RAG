@@ -1,5 +1,4 @@
 # 🚀 Agentic RAG: High-Performance Hybrid Search, Semantic Cache & Telegram Bot Integration
-
 > A state-of-the-art Retrieval-Augmented Generation (RAG) system built with **FastAPI**, **LangGraph**, and **Qdrant**. Features an advanced agentic pipeline designed for low latency, high precision, and incremental data synchronization.
 
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)
@@ -15,7 +14,7 @@
 
 | Component | Technology | Description |
 |---|---|---|
-| **LLM Engine** | Google Gemini 1.5 Flash | Optimized for speed and high rate-limits |
+| **LLM Engine** | Cohere command-r-plus-08-2024 | Optimized for speed and high rate-limits |
 | **Vector Database** | Qdrant | Support for dense and sparse vectors via SPLADE |
 | **Semantic Cache** | Redis | Ultra-low latency query result caching |
 | **Sparse Embeddings** | SPLADE (via FastEmbed) | Local HuggingFace models for keyword-aware retrieval |
