@@ -9,6 +9,7 @@ from helpers import config
 from dotenv import load_dotenv
 from llm.llm import get_llm
 import time
+import pandas as pd
 import os
 from logs.logger import logger
 
@@ -23,7 +24,6 @@ import asyncio
 
 def run_rag_evaluation():
 
-    # Load questions from external file
     test_questions = []
     test_data_path = os.path.join(os.path.dirname(__file__), "test_data.txt")
     if os.path.exists(test_data_path):
@@ -32,11 +32,10 @@ def run_rag_evaluation():
     
     if not test_questions:
         logger.error(f"test_data.txt not found or empty at {test_data_path}. Please add questions to run evaluation.")
-        import pandas as pd
+        
         return pd.DataFrame()
     
-    # We take the first 3 for efficiency in this run
-    test_questions = test_questions[:3]
+    test_questions = test_questions[:settings.EVAL_MAX_QUESTIONS]
 
     embeddings = EmbModel.get_embedding()
 
@@ -44,15 +43,12 @@ def run_rag_evaluation():
 
     for question in test_questions:
 
-
         retrieved_docs = asyncio.run(RetrieveChunks.advanced_retrieve(
             query=question
-        ))[:3]   
-
-        MAX_CONTEXT_CHARS = 300
+        ))[:settings.EVAL_RETRIEVAL_K]   
 
         contexts = [
-            doc.page_content[:MAX_CONTEXT_CHARS]
+            doc.page_content[:settings.EVAL_MAX_CONTEXT_CHARS]
             for doc in retrieved_docs
         ]
 
@@ -68,10 +64,9 @@ Question:
 Answer:
 """
 
-
         answer = llm.invoke(full_prompt)
 
-        answer_text = answer.content[:600]
+        answer_text = answer.content[:settings.EVAL_MAX_RESPONSE_CHARS]
 
         samples.append({
             "user_input": question,
@@ -79,14 +74,14 @@ Answer:
             "response": answer_text,
         })
 
-        time.sleep(2)
+        time.sleep(settings.EVAL_SLEEP_BETWEEN_SAMPLES)
 
     dataset = EvaluationDataset.from_list(samples)
 
     eval_llm = ChatGroq(
-        model="llama-3.1-8b-instant",  
-        temperature=0,
-        max_tokens=1024,
+        model=settings.EVAL_LLM_MODEL,  
+        temperature=settings.EVAL_LLM_TEMPERATURE,
+        max_tokens=settings.EVAL_LLM_MAX_TOKENS,
         n=1
     )
 
@@ -97,15 +92,15 @@ Answer:
         dataset=dataset,
         metrics=[
             Faithfulness(),
-            ResponseRelevancy(strictness=1)
+            ResponseRelevancy(strictness=settings.EVAL_RELEVANCY_STRICTNESS)
         ],
         llm=ragas_llm,
         embeddings=ragas_embeddings,
         run_config=RunConfig(
-            max_workers=1,
-            timeout=300,
-            max_retries=20,
-            max_wait=5 
+            max_workers=settings.EVAL_MAX_WORKERS,
+            timeout=settings.EVAL_TIMEOUT,
+            max_retries=settings.EVAL_MAX_RETRIES,
+            max_wait=settings.EVAL_MAX_WAIT 
         )
     )
 

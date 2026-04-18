@@ -44,6 +44,21 @@ class Settings(BaseSettings):
     QDRANT_SCROLL_LIMIT_OVERLAP: int = 1000
     QDRANT_SCROLL_LIMIT_SYNC: int = 500
     METADATA_DB_NAME: str = "file_metadata.db"
+    
+    EVAL_MAX_QUESTIONS: int = 3
+    EVAL_RETRIEVAL_K: int = 3
+    EVAL_MAX_CONTEXT_CHARS: int = 300
+    EVAL_MAX_RESPONSE_CHARS: int = 600
+    EVAL_SLEEP_BETWEEN_SAMPLES: int = 2
+    EVAL_LLM_MODEL: str = "llama-3.1-8b-instant"
+    EVAL_LLM_TEMPERATURE: float = 0.0
+    EVAL_LLM_MAX_TOKENS: int = 1024
+    EVAL_RELEVANCY_STRICTNESS: int = 1
+    EVAL_MAX_WORKERS: int = 1
+    EVAL_TIMEOUT: int = 300
+    EVAL_MAX_RETRIES: int = 20
+    EVAL_MAX_WAIT: int = 5
+
     GROQ_API_KEY:str
 
     DENSE_SEARCH_WEIGHT: float
