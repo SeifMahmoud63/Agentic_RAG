@@ -26,11 +26,9 @@ from agent.graph import graph
 import redis as redis_lib
 
 
-
-
 data_router = APIRouter(
-    prefix="/api/v25/data",
-    tags=["api_v25", "data"],
+    prefix="/api/v1/data",
+    tags=["api_v1", "data"],
 )
 
 @data_router.post("/upload/{project_id}")
@@ -63,7 +61,6 @@ async def upload_data(project_id: str, file: UploadFile,
     except Exception as e:
 
         logger.error(f"Error while uploading file: {e}")
-        # Automatic cache reset on error
         try:
             cache = redis.get_cache()
             cache.clear()
@@ -97,11 +94,9 @@ async def process_assets_folder(process_request: ProcessRequest):
     base_path = base_ctrl.file_dir
     results = []
     
-    # If project_id is provided, only process that folder
     if process_request.project_id:
         target_folders = [process_request.project_id]
     else:
-        # Otherwise, scan all folders
         if not os.path.exists(base_path):
             return JSONResponse(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -143,12 +138,10 @@ async def process_assets_folder(process_request: ProcessRequest):
                 })
                 continue
 
-    # Summarize results
     successful = [r for r in results if r.get("status") == "success"]
     skipped = [r for r in results if r.get("status") == "skipped"]
     errors = [r for r in results if r.get("status") == "error"]
 
-    # Always clear cache after asset processing to ensure the RAG sees new data
     try:
         cache = redis.get_cache()
         cache.clear()
