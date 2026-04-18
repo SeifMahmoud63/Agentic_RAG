@@ -81,3 +81,4 @@ class ManualSemanticCache:
         for key in self.r.scan_iter(f"{self.RESULT_PREFIX}*"):
             self.r.delete(key)
         print(f"--- [MANUAL CACHE CLEARED] Removed {count} entries ---")
+

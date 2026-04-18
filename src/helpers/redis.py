@@ -21,3 +21,4 @@ def get_cache():
     if _global_cache is None:
         return init_cache()
     return _global_cache
+
