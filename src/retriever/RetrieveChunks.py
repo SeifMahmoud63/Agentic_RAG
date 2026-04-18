@@ -34,8 +34,8 @@ async def advanced_retrieve(query: str, top_k: Optional[int] = None) -> List[Doc
     start_parallel = time.time()
     # We trigger both simultaneously using Gemini to avoid Cohere Trial rate limits.
     res_rewrite, res_hyde = await asyncio.gather(
-        fast_llm.ainvoke(rewrite_template.format(query=query)),
-        fast_llm.ainvoke(hyde_template.format(query=query))
+        llm.ainvoke(rewrite_template.format(query=query)),
+        llm.ainvoke(hyde_template.format(query=query))
     )
     
     rewritten_query = res_rewrite.content
