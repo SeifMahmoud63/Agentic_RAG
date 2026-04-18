@@ -96,6 +96,9 @@ The system is continuously evaluated using the **Ragas** framework to ensure pro
 ---
 [![Telegram Bot](https://img.shields.io/badge/Telegram-@YourBotName-26A5E4?style=flat-square&logo=telegram&logoColor=white)](https://t.me/your_bot)
 
+<p align="center">
+  <img src="src\telegram.jpg" alt="Telegram Bot Demo" width="400"/>
+</p>
 
 ## 🏗️ Core Technology Stack
 
