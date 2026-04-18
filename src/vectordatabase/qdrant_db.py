@@ -25,11 +25,6 @@ from models import ResponseSignal
 
 
 
-# ---------------------------------------------------------------------------
-
-# Singleton accessors
-# ---------------------------------------------------------------------------
-
 @lru_cache(maxsize=1)
 def get_qdrant_client() -> QdrantClient:
     settings = get_settings()
@@ -54,13 +49,9 @@ def warm_up():
     logger.info("Qdrant warm-up complete.")
 
 
-# ---------------------------------------------------------------------------
-# Collection management
-# ---------------------------------------------------------------------------
-
-DENSE_VECTOR_NAME = "dense"
-SPARSE_VECTOR_NAME = "sparse"
-DENSE_DIM = 384  # HuggingFace all-MiniLM-L6-v2 dimension
+DENSE_VECTOR_NAME = get_settings().QDRANT_DENSE_VECTOR_NAME
+SPARSE_VECTOR_NAME = get_settings().QDRANT_SPARSE_VECTOR_NAME
+DENSE_DIM = get_settings().QDRANT_DENSE_DIM
 
 
 def _ensure_collection():
@@ -84,13 +75,11 @@ def _ensure_collection():
                 ),
             },
         )
-        # Create payload index on file_id for fast filtered deletion
         client.create_payload_index(
             collection_name=collection_name,
             field_name="file_id",
             field_schema=models.PayloadSchemaType.KEYWORD,
         )
-        # Create payload index on chunk_hash for fast sync checks
         client.create_payload_index(
             collection_name=collection_name,
             field_name="chunk_hash",
@@ -101,9 +90,6 @@ def _ensure_collection():
         logger.info(f"Qdrant collection '{collection_name}' already exists.")
 
 
-# ---------------------------------------------------------------------------
-# Upsert
-# ---------------------------------------------------------------------------
 
 def upsert_chunks(
     chunks: List[Document],
@@ -121,21 +107,16 @@ def upsert_chunks(
     client = get_qdrant_client()
     collection_name = settings.QDRANT_COLLECTION
 
-    # Get embedding model instances
     dense_model = EmbModel.get_embedding()
     sparse_model = get_sparse_model()
 
-    # --- Batch Embedding Logic ---
-    # We embed in small batches to stay within memory limits (avoiding 'Unable to allocate' errors)
-    # and to respect API rate limits.
-    BATCH_SIZE = 4
+    BATCH_SIZE = settings.QDRANT_UPSERT_BATCH_SIZE
     points = []
     
     for start in range(0, len(chunks), BATCH_SIZE):
         batch_chunks = chunks[start : start + BATCH_SIZE]
         batch_texts = [c.page_content for c in batch_chunks]
 
-        # 1. Dense Embeddings (Gemini) with Retry
         batch_dense = None
         for attempt in range(settings.MAX_RETRIES):
 
@@ -154,11 +135,9 @@ def upsert_chunks(
         if not batch_dense:
             raise Exception(ResponseSignal.EMBEDDING_BATCH_FAILED.value)
 
-        # 2. Sparse Embeddings (SPLADE - Local)
-        # Processing in smaller batches prevents memory allocation crashes
+
         batch_sparse = list(sparse_model.embed(batch_texts))
 
-        # 3. Build Points for this batch
         for i, chunk in enumerate(batch_chunks):
             chunk_id = str(uuid.uuid4())
             chunk_text_hash = generate_doc_hash(chunk.page_content)
@@ -192,8 +171,7 @@ def upsert_chunks(
             )
             points.append(point)
 
-    # Batch upsert to Qdrant
-    UPSERT_BATCH_SIZE = 64
+    UPSERT_BATCH_SIZE = settings.QDRANT_POINTS_UPSERT_BATCH_SIZE
     for start in range(0, len(points), UPSERT_BATCH_SIZE):
         batch = points[start : start + UPSERT_BATCH_SIZE]
         client.upsert(collection_name=collection_name, points=batch)
@@ -221,9 +199,7 @@ def find_file_by_content_overlap(
     settings = get_settings()
     collection_name = settings.QDRANT_COLLECTION
 
-    # Query Qdrant for any points matching these hashes in the same project
-    # We use scroll because we only need the presence of hashes, not scores.
-    # Note: We limit to a reasonable number of points to prevent memory issues.
+
     matches, _ = client.scroll(
         collection_name=collection_name,
         scroll_filter=models.Filter(
@@ -233,13 +209,12 @@ def find_file_by_content_overlap(
             ]
         ),
         with_payload=["file_id"],
-        limit=1000
+        limit=settings.QDRANT_SCROLL_LIMIT_OVERLAP
     )
 
     if not matches:
         return None, 0.0
 
-    # Count hits per file_id
     file_counts = defaultdict(int)
     for p in matches:
         f_id = p.payload.get("file_id")
@@ -249,13 +224,10 @@ def find_file_by_content_overlap(
     if not file_counts:
         return None, 0.0
 
-    # Find the best match
     best_file_id = max(file_counts, key=file_counts.get)
     best_count = file_counts[best_file_id]
     
-    # Overlap = (count of matched unique hashes) / (total unique hashes in new file)
-    # Note: Qdrant scroll might return multiple points for the same hash if indexed multiple times,
-    # but here we just want a heuristic of "how much of this new file do I already have?"
+
     overlap_pct = best_count / len(chunk_hashes)
 
     return best_file_id, overlap_pct
@@ -280,8 +252,7 @@ def sync_file_chunks(
     settings = get_settings()
     collection_name = settings.QDRANT_COLLECTION
 
-    # 1. Fetch current chunk states for this file from Qdrant
-    # Use pagination (scroll) to ensure we get all points even for large files
+
     existing_map = defaultdict(list)
     offset = None
     
@@ -292,7 +263,7 @@ def sync_file_chunks(
                 must=[models.FieldCondition(key="file_id", match=models.MatchValue(value=file_id))]
             ),
             with_payload=["chunk_hash"],
-            limit=500, # Smaller pages for stability
+            limit=settings.QDRANT_SCROLL_LIMIT_SYNC, 
             offset=offset
         )
         
@@ -303,7 +274,7 @@ def sync_file_chunks(
         if offset is None:
             break
     
-    # 2. Categorize new chunks
+   
     chunks_to_upsert = []
     hashes_staying = set()
     
@@ -314,7 +285,6 @@ def sync_file_chunks(
         else:
             chunks_to_upsert.append(chunk)
 
-    # 3. Identify orphans to delete (hashes in DB but not in new document)
     ids_to_delete = []
     for h, p_ids in existing_map.items():
         if h not in hashes_staying:
@@ -347,23 +317,18 @@ def sync_file_chunks(
     return summary
 
 
-# ---------------------------------------------------------------------------
-# Delete
-# ---------------------------------------------------------------------------
 
 def delete_by_file_id(file_id: str) -> int:
     """
     Delete all points matching the given file_id using a filtered delete.
     Returns approximate count of deleted points.
     """
-    # Self-healing: Ensure collection exists before trying to count/delete
     _ensure_collection()
     
     settings = get_settings()
     client = get_qdrant_client()
     collection_name = settings.QDRANT_COLLECTION
 
-    # Count before delete (for logging)
     count_result = client.count(
         collection_name=collection_name,
         count_filter=models.Filter(
@@ -398,9 +363,7 @@ def delete_by_file_id(file_id: str) -> int:
     return deleted_count
 
 
-# ---------------------------------------------------------------------------
-# Hybrid search
-# ---------------------------------------------------------------------------
+
 
 def hybrid_search(query: str, top_k: Optional[int] = None, dense_query: Optional[str] = None) -> List[Document]:
     """
@@ -428,7 +391,6 @@ def hybrid_search(query: str, top_k: Optional[int] = None, dense_query: Optional
         values=query_sparse_raw.values.tolist(),
     )
 
-    # Prefetch exactly top_k candidates from each strategy
     prefetch_limit = top_k
 
     results = client.query_points(
@@ -449,7 +411,6 @@ def hybrid_search(query: str, top_k: Optional[int] = None, dense_query: Optional
         limit=top_k,
     )
 
-    # Convert to LangChain Documents
     documents = []
     for point in results.points:
         payload = point.payload or {}

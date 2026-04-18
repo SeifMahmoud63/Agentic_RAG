@@ -36,6 +36,14 @@ class Settings(BaseSettings):
     QDRANT_HOST: str = "localhost"
     QDRANT_PORT: int = 6333
     QDRANT_COLLECTION: str = "rag_documents"
+    QDRANT_DENSE_VECTOR_NAME: str = "dense"
+    QDRANT_SPARSE_VECTOR_NAME: str = "sparse"
+    QDRANT_DENSE_DIM: int = 384
+    QDRANT_UPSERT_BATCH_SIZE: int = 4
+    QDRANT_POINTS_UPSERT_BATCH_SIZE: int = 64
+    QDRANT_SCROLL_LIMIT_OVERLAP: int = 1000
+    QDRANT_SCROLL_LIMIT_SYNC: int = 500
+    METADATA_DB_NAME: str = "file_metadata.db"
     GROQ_API_KEY:str
 
     DENSE_SEARCH_WEIGHT: float

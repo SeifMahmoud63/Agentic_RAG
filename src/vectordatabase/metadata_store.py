@@ -10,19 +10,18 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 
 
+from helpers.config import get_settings
 
-# Database path: sits alongside the src directory
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "file_metadata.db")
+DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), get_settings().METADATA_DB_NAME)
 
 
 def _get_connection(check_schema: bool = True) -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")  # Better concurrency
+    conn.execute("PRAGMA journal_mode=WAL")  
     
     if check_schema:
-        # Self-healing: Ensure table exists on every connection attempt
-        # This is fast since sqlite caches schema info.
+
         try:
             conn.execute("SELECT 1 FROM file_registry LIMIT 1")
         except sqlite3.OperationalError:
@@ -34,7 +33,6 @@ def _get_connection(check_schema: bool = True) -> sqlite3.Connection:
 
 def init_db():
     """Create tables if they don't exist."""
-    # We pass check_schema=False to avoid infinite recursion!
     conn = _get_connection(check_schema=False)
     try:
         conn.executescript("""
@@ -154,7 +152,6 @@ def register_new_version(
     now = datetime.utcnow().isoformat()
     conn = _get_connection()
     try:
-        # Get current version
         row = conn.execute(
             "SELECT current_version FROM file_registry WHERE file_id = ?",
             (file_id,)
@@ -165,7 +162,6 @@ def register_new_version(
 
         new_version = row["current_version"] + 1
 
-        # Update registry
         conn.execute(
             """UPDATE file_registry 
                SET current_hash = ?, current_version = ?, updated_at = ?
@@ -173,7 +169,6 @@ def register_new_version(
             (file_hash, new_version, now, file_id)
         )
 
-        # Add version entry
         conn.execute(
             """INSERT INTO file_versions (file_id, file_hash, version, created_at)
                VALUES (?, ?, ?, ?)""",

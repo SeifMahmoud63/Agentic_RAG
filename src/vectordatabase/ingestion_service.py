@@ -16,8 +16,6 @@ from controllers.process_controller import ProcessController
 from vectordatabase import qdrant_db as QdrantDb, metadata_store as MetadataStore
 
 
-
-
 def ingest_file(
     file_id: str,
     original_name: str,
@@ -75,7 +73,6 @@ def ingest_file(
 
     clean_name = _extract_original_name(file_id)
     
-    # --- STEP 1: Process Content First (to get chunk hashes for identification) ---
     try:
         content = controller.get_content(file_id=file_id)
         chunks = controller.process(
@@ -100,13 +97,11 @@ def ingest_file(
             "detail": "No chunks generated (file might be empty).",
         }
 
-    # --- STEP 2: Identity Resolution (Who am I?) ---
     version = 1
     is_update = False
-    use_file_id = file_id # Default to new ID
+    use_file_id = file_id 
     match_source = "new"
 
-    # A. First, check if the FILENAME already exists in this project
     existing_file = MetadataStore.get_file_by_name(clean_name, project_id)
     
     if existing_file:
@@ -117,7 +112,6 @@ def ingest_file(
         match_source = "filename"
         logger.info(f"UPDATE detected for '{clean_name}' (Filename Match). Anchor ID: {use_file_id}")
     else:
-        # B. If no name match, perform GLOBAL CONTENT OVERLAP CHECK
         logger.info(f"Scanning project '{project_id}' for content overlap for '{clean_name}'...")
         new_chunk_hashes = [generate_doc_hash(c.page_content) for c in chunks]
         
@@ -127,7 +121,6 @@ def ingest_file(
         )
 
         if sim_file_id and overlap_pct >= settings.DUPLICATE_THRESHOLD:
-            # We found a sibling! Adopt its identity.
             is_update = True
             use_file_id = sim_file_id
             
@@ -143,7 +136,6 @@ def ingest_file(
         else:
             logger.info(f"No significant overlap found ({overlap_pct*100:.1f}% matched). Treating as NEW document.")
 
-    # --- STEP 3: Execute Sync ---
     sync_summary = QdrantDb.sync_file_chunks(
         new_chunks=chunks,
         file_id=use_file_id,
@@ -152,11 +144,9 @@ def ingest_file(
         project_id=project_id,
     )
 
-    # --- STEP 4: Update Metadata Registry ---
     if is_update:
         MetadataStore.register_new_version(use_file_id, file_hash)
-        # Optional: If the name changed, update it in metadata to the new name? 
-        # For now we keep the original anchor name, or we could update it.
+
     else:
         MetadataStore.register_new_file(
             file_id=use_file_id,
