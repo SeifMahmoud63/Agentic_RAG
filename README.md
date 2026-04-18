@@ -110,7 +110,7 @@ src/
 │   ├── project_controller.py # Multi-project path management
 │   └── process_controller.py # Ingestion/Chunking orchestration
 ├── embeddingmodel/         # AI Vector Logic
-│   └── emb_model.py        # Dense embedding model (Gemini/HF)
+│   └── emb_model.py        # Dense embedding model (Hugging Face)
 ├── evaluationragas/        # Testing & Metrics
 │   ├── evaluation.py       # Ragas scoring orchestration
 │   └── test_data.txt       # Golden test set for quality checks
